@@ -1,5 +1,4 @@
 #include <SPI.h>
-#include <Adafruit_Sensor.h>
 #include <SoftwareSerial.h>
 #include <CC1200.h>
 
