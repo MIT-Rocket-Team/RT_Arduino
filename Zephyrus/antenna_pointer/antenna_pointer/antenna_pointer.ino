@@ -5,13 +5,17 @@
 #define MISO PA6
 #define SCLK PA5
 #define CS_AZ PB0
+#define SLP_AZ PB1
+#define EN_AZ PB2
 #define CS_EL PB6
+#define SLP_EL PB7
+#define EN_EL PB8
 
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
-SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
+SPISettings settings(1000000, MSBFIRST, SPI_MODE1);
 
-DRV8452 drv_azimuth(&SPI_3, settings, CS_AZ);
-DRV8452 drv_elevation(&SPI_3, settings, CS_EL);
+DRV8452 drv_azimuth(&SPI_3, settings, CS_AZ, SLP_AZ, EN_AZ);
+DRV8452 drv_elevation(&SPI_3, settings, CS_EL, SLP_EL, EN_EL);
 
 float elevation_target;
 float azimuth_target;
