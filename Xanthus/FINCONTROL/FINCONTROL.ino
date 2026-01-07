@@ -25,8 +25,8 @@
 
 #define setpoint 0.0
 
-#define kP 0.1887
-#define kD 0.03774
+#define kP 0.2600
+#define kD 0.0520
 
 enum Servo_State {
   SERVO_ZERO,
