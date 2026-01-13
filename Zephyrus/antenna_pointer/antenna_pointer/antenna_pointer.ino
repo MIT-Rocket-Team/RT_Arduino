@@ -32,28 +32,50 @@ void setup() {
   SPI_3.begin();
   drv_azimuth.setup();
   drv_elevation.setup();
+  drv_azimuth.setCurrentLimit(1);
+  drv_elevation.setCurrentLimit(1);
   last_step_elevation = micros();
   last_step_azimuth = micros();
 }
 
 void loop() {
-  if (Serial.available() >= 10) {
+  if (Serial.available() >= 11) {
     if(Serial.peek() == 0xAA){
-      uint8_t data[10];
-      Serial.readBytes((char*)data, 10);
+      uint8_t data[11];
+      Serial.readBytes((char*)data, 11);
       uint8_t checksum = 0;
-      for(int i = 1; i < 9; i++){
+      for(int i = 1; i < 10; i++){
         checksum += data[i];
       }
-      if(checksum == data[9]){
-        memcpy(&azimuth_target, &data[1], 4);
-        memcpy(&elevation_target, &data[5], 4);
-      } else {
-        Serial.println("Checksum not met");
+      if(checksum == data[10]){
+        switch (data[1]){
+          case 0x00:
+            memcpy(&azimuth_target, &data[2], 4); //0 - 360 deg 
+            memcpy(&elevation_target, &data[6], 4); // -90 to 90 deg
+            break;
+          case 0x01:
+            elevation_target += .5;
+            break;
+          case 0x02:
+            elevation_target -= .5;
+            break;
+          case 0x03:
+            azimuth_target += .5;
+            break;
+          case 0x04:
+            azimuth_target -= .5;
+            break;
+          case 0x05:
+            elevation_steps = 0;
+            azimuth_steps = 0;
+            elevation_target = 0.0;
+            azimuth_target = 0.0;
+            break;
+        }
       }
-
       azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0);
       elevation_target_steps = round(elevation_target * (1/1.8) * 50.0);
+      shortest_path();
     } else {
       Serial.read();
     }
@@ -82,4 +104,14 @@ void loop() {
     }
   }
   
+}
+
+void shortest_path(){
+  while(abs(azimuth_target_steps - azimuth_steps) > 5000){
+    if(azimuth_target_steps - azimuth_steps > 0){
+      azimuth_target_steps -= 10000;
+    } else {
+      azimuth_target_steps += 10000;
+    }
+  }
 }
