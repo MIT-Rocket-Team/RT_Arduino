@@ -11,6 +11,9 @@
 #define SLP_EL PB7
 #define EN_EL PB8
 
+#define POINT_ERR 1
+bool neww;
+
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
 SPISettings settings(1000000, MSBFIRST, SPI_MODE1);
 
@@ -19,6 +22,8 @@ DRV8452 drv_elevation(&SPI_3, settings, CS_EL, SLP_EL, EN_EL);
 
 float elevation_target;
 float azimuth_target;
+float old_a_target;
+float old_e_target;
 int elevation_target_steps;
 int azimuth_target_steps;
 int elevation_steps;
@@ -32,8 +37,8 @@ void setup() {
   SPI_3.begin();
   drv_azimuth.setup();
   drv_elevation.setup();
-  drv_azimuth.setCurrentLimit(1);
-  drv_elevation.setCurrentLimit(1);
+  drv_azimuth.setCurrentLimit(2.5);
+  drv_elevation.setCurrentLimit(2.5);
   last_step_elevation = micros();
   last_step_azimuth = micros();
 }
@@ -50,20 +55,24 @@ void loop() {
       if(checksum == data[10]){
         switch (data[1]){
           case 0x00:
+            old_a_target = azimuth_target;
+            old_e_target = elevation_target;
             memcpy(&azimuth_target, &data[2], 4); //0 - 360 deg 
             memcpy(&elevation_target, &data[6], 4); // -90 to 90 deg
+            azimuth_target = abs(azimuth_target - old_a_target) > POINT_ERR ? azimuth_target : old_a_target;
+            elevation_target = abs(elevation_target - old_e_target) > POINT_ERR ? elevation_target : old_e_target;
             break;
           case 0x01:
-            elevation_target += .5;
+            elevation_target += 5;
             break;
           case 0x02:
-            elevation_target -= .5;
+            elevation_target -= 5;
             break;
           case 0x03:
-            azimuth_target += .5;
+            azimuth_target += 5;
             break;
           case 0x04:
-            azimuth_target -= .5;
+            azimuth_target -= 5;
             break;
           case 0x05:
             elevation_steps = 0;
@@ -73,6 +82,9 @@ void loop() {
             break;
         }
       }
+
+
+      Serial.println(elevation_target);      
       azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0);
       elevation_target_steps = round(elevation_target * (1/1.8) * 50.0);
       shortest_path();
