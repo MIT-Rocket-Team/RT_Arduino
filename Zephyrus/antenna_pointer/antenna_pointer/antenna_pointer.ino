@@ -12,7 +12,6 @@
 #define EN_EL PB8
 
 #define POINT_ERR 1
-bool neww;
 
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
 SPISettings settings(1000000, MSBFIRST, SPI_MODE1);
@@ -31,14 +30,17 @@ int azimuth_steps;
 float error_tolerance = 0.05;
 long last_step_elevation;
 long last_step_azimuth;
+unsigned long elInterval = 3600;
 
 void setup() {
   Serial.begin(115200);
   SPI_3.begin();
   drv_azimuth.setup();
   drv_elevation.setup();
-  drv_azimuth.setCurrentLimit(2.5);
-  drv_elevation.setCurrentLimit(2.5);
+  drv_azimuth.setHoldCurrentLimit(2.5);
+  drv_azimuth.setStepCurrentLimit(3.5);
+  drv_elevation.setHoldCurrentLimit(2.5);
+  drv_elevation.setStepCurrentLimit(3.5);
   last_step_elevation = micros();
   last_step_azimuth = micros();
 }
@@ -88,6 +90,9 @@ void loop() {
       azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0);
       elevation_target_steps = round(elevation_target * (1/1.8) * 50.0);
       shortest_path();
+
+      el_interval = 10000;
+      
     } else {
       Serial.read();
     }
@@ -109,10 +114,12 @@ void loop() {
       drv_elevation.fullStep(true);
       elevation_steps ++;
       last_step_elevation = micros();
+      computeStepInterval(el_interval);
     } else if(elevation_steps > elevation_target_steps){
       drv_elevation.fullStep(false);
       elevation_steps --;
       last_step_elevation = micros();
+      computeStepInterval(el_interval);
     }
   }
   
@@ -125,5 +132,13 @@ void shortest_path(){
     } else {
       azimuth_target_steps += 10000;
     }
+  }
+}
+
+unsigned long computeStepInterval(unsigned long currentInterval) {
+  if (currentInterval > 3600) {
+    return currentInterval - 100;
+  } else {
+    return currentInterval
   }
 }
