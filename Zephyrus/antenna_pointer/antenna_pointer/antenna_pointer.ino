@@ -30,7 +30,8 @@ int azimuth_steps;
 float error_tolerance = 0.05;
 long last_step_elevation;
 long last_step_azimuth;
-unsigned long elInterval = 3600;
+unsigned long el_interval = 3600;
+unsigned long az_interval = 3600;
 
 void setup() {
   Serial.begin(115200);
@@ -38,9 +39,9 @@ void setup() {
   drv_azimuth.setup();
   drv_elevation.setup();
   drv_azimuth.setHoldCurrentLimit(2.5);
-  drv_azimuth.setStepCurrentLimit(3.5);
+  drv_azimuth.setStepCurrentLimit(2.5);
   drv_elevation.setHoldCurrentLimit(2.5);
-  drv_elevation.setStepCurrentLimit(3.5);
+  drv_elevation.setStepCurrentLimit(2.5);
   last_step_elevation = micros();
   last_step_azimuth = micros();
 }
@@ -59,9 +60,10 @@ void loop() {
           case 0x00:
             old_a_target = azimuth_target;
             old_e_target = elevation_target;
-            memcpy(&azimuth_target, &data[2], 4); //0 - 360 deg 
+            memcpy(&azimuth_target, &data[2], 4); //0 - 360 deg
+            azimuth_target *= -1.0; 
             memcpy(&elevation_target, &data[6], 4); // -90 to 90 deg
-            azimuth_target = abs(azimuth_target - old_a_target) > POINT_ERR ? azimuth_target : old_a_target;
+            azimuth_target = (abs(azimuth_target - old_a_target) > POINT_ERR ? azimuth_target : old_a_target);
             elevation_target = abs(elevation_target - old_e_target) > POINT_ERR ? elevation_target : old_e_target;
             break;
           case 0x01:
@@ -87,58 +89,53 @@ void loop() {
 
 
       Serial.println(elevation_target);      
-      azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0);
-      elevation_target_steps = round(elevation_target * (1/1.8) * 50.0);
+      azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0 * 4.0);
+      elevation_target_steps = round(elevation_target * (1/1.8) * 50.0 * 4.0);
       shortest_path();
 
-      el_interval = 10000;
+      el_interval = 2000;
+      az_interval = 2000;
       
     } else {
       Serial.read();
     }
   }
 
-  if(micros() - last_step_azimuth >= 3600){
+  if(micros() - last_step_azimuth >= az_interval){
     if(azimuth_steps < azimuth_target_steps){
       drv_azimuth.fullStep(true);
       azimuth_steps ++;
       last_step_azimuth = micros();
+      if (az_interval > 1000) { az_interval -= 10; };
     } else if(azimuth_steps > azimuth_target_steps){
       drv_azimuth.fullStep(false);
       azimuth_steps --;
       last_step_azimuth = micros();
+      if (az_interval > 1000) { az_interval -= 10; };
     }
   }
-  if(micros() - last_step_elevation >= 3600){
+  if(micros() - last_step_elevation >= el_interval){
     if(elevation_steps < elevation_target_steps){
       drv_elevation.fullStep(true);
       elevation_steps ++;
       last_step_elevation = micros();
-      computeStepInterval(el_interval);
+      if (el_interval > 1000) { el_interval -= 10; };
     } else if(elevation_steps > elevation_target_steps){
       drv_elevation.fullStep(false);
       elevation_steps --;
       last_step_elevation = micros();
-      computeStepInterval(el_interval);
+      if (el_interval > 1000) { el_interval -= 10; };
     }
   }
   
 }
 
 void shortest_path(){
-  while(abs(azimuth_target_steps - azimuth_steps) > 5000){
+  while(abs(azimuth_target_steps - azimuth_steps) > 4 * 5000){ //if we are > 180 deg away, we can do better
     if(azimuth_target_steps - azimuth_steps > 0){
-      azimuth_target_steps -= 10000;
+      azimuth_target_steps -= 4 * 10000; //decrease 360deg
     } else {
-      azimuth_target_steps += 10000;
+      azimuth_target_steps += 4 * 10000; //increase 360deg
     }
-  }
-}
-
-unsigned long computeStepInterval(unsigned long currentInterval) {
-  if (currentInterval > 3600) {
-    return currentInterval - 100;
-  } else {
-    return currentInterval
   }
 }
