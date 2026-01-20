@@ -19,6 +19,9 @@ SPISettings settings(1000000, MSBFIRST, SPI_MODE1);
 DRV8452 drv_azimuth(&SPI_3, settings, CS_AZ, SLP_AZ, EN_AZ);
 DRV8452 drv_elevation(&SPI_3, settings, CS_EL, SLP_EL, EN_EL);
 
+float p_azimuth_target;
+float p_elevation_target;
+
 float elevation_target;
 float azimuth_target;
 float old_a_target;
@@ -45,9 +48,9 @@ void setup() {
   drv_azimuth.setup();
   drv_elevation.setup();
   drv_azimuth.setHoldCurrentLimit(2.5);
-  drv_azimuth.setStepCurrentLimit(2.5);
+  drv_azimuth.setStepCurrentLimit(2.75);
   drv_elevation.setHoldCurrentLimit(2.5);
-  drv_elevation.setStepCurrentLimit(2.5);
+  drv_elevation.setStepCurrentLimit(2.75);
   last_step_elevation = micros();
   last_step_azimuth = micros();
 }
@@ -62,6 +65,8 @@ void loop() {
         checksum += data[i];
       }
       if(checksum == data[10]){
+        p_azimuth_target = azimuth_target;
+        p_elevation_target = elevation_target;
         switch (data[1]){
           case 0x00:
             old_a_target = azimuth_target;
@@ -99,14 +104,20 @@ void loop() {
       elevation_target_steps = round(elevation_target * (1/1.8) * 50.0 * 4.0);
       shortest_path();
 
-      newStepsAz = 0;
-      newStepsEl = 0;
+      if (abs(p_azimuth_target - azimuth_target) >= 1) {
+        newStepsAz = 0;
+        pastTAz = 0;
+        az_adjust();
+      }
 
-      pastTAz = 0;
-      pastTEl = 0;
+      if (abs(p_elevation_target - elevation_target) >= 1) {
+        newStepsEl = 0;
+        pastTEl = 0;
+        el_adjust();
+      }
 
-      az_adjust();
-      el_adjust();
+      
+      
       
     } else {
       Serial.read();
@@ -165,13 +176,13 @@ So t = sqrt(2 * max deg / 1255)
 */ 
 
 void az_adjust() {
-  unsigned long newT = sqrt((2.0 * ((newStepsAz + 1)/ 4.0) / 1255.0)) * 1000000.0;
+  unsigned long newT = sqrt((2.0 * ((newStepsAz + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
   az_interval = newT - pastTAz;
   pastTAz = newT;
 }
 
 void el_adjust() {
-  unsigned long newT = sqrt((2.0 * ((newStepsEl + 1)/ 4.0) / 1255.0)) * 1000000.0;
+  unsigned long newT = sqrt((2.0 * ((newStepsEl + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
   el_interval = newT - pastTEl;
   pastTEl = newT;
 }
