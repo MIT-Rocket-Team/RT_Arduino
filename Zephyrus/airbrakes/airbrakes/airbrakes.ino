@@ -473,6 +473,21 @@ void loop() {
 
     // READ TELEMETRY
 
+    if (Serial.available() >= 11) {
+      if(Serial.peek() == 0xAA){
+        int n = 10; // size of the packet
+        uint8_t data[n+1];
+        Serial.readBytes((char*)data, n+1);
+        uint8_t checksum = 0;
+        for(int i = 1; i < n; i++){
+          checksum += data[i];
+        }
+        if(checksum == data[n]){
+          // proc start, vel/accel data, and apogee status.
+        }
+      }
+    }
+
     handleAirbrakesState();
     lastTimeStamp = millis();
   }
