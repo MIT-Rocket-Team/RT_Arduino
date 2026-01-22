@@ -12,6 +12,7 @@
 #define AIRBRAKES_MEASUREMENT_FREQ_HZ     5
 #define AIRBRAKES_SIMULATION_T_APOG      34.0f
 #define DEBUG_AIRBRAKES_ON               0
+#define LOOP_FREQ                        100
 
 /* ------------------ Measurements types ------------------ */
 typedef struct {
@@ -94,6 +95,8 @@ float A0_req = 0.0f;
 float currentRocketVel   = 0.0f;
 float currentRocketAccel = 0.0f;
 bool  apogeeReached      = false;
+
+float lastTimeStamp      = 0;
 
 /* data collection */
 AirbrakesAccelerationMeasurement accelData[AIRBRAKES_N_MEASUREMENTS];
@@ -438,11 +441,14 @@ void handleAirbrakesState() {
       float deployedFraction = 2.0f * A0_req * (t - airbrakesCtrlStartTime);
       setAirbrakesServo(deployedFraction);
     }
-    if (t >= airbrakesCtrlStartTime + 0.5f) state = CONTROLLING_PLATEAU;
+    if (t >= airbrakesCtrlStartTime + 0.5f) {
+      state = CONTROLLING_PLATEAU;
+      setAirbrakesServo(A0_req);
+    }
   }
   // plateau
   else if (state == CONTROLLING_PLATEAU) {
-    setAirbrakesServo(A0_req);
+    // servo is already
     if (status.vel_z <= 0.0f || status.apogeeReached) {
       state = DONE;
       setAirbrakesServo(0.0f);
@@ -463,5 +469,12 @@ void setup() {
 
 void loop() {
   // Replace with real telemetry
-  handleAirbrakesState();
+  if(millis()-lastTimeStamp >= 1000.0f/LOOP_FREQ) {
+
+    // READ TELEMETRY
+
+    handleAirbrakesState();
+    lastTimeStamp = millis();
+  }
+  
 }
