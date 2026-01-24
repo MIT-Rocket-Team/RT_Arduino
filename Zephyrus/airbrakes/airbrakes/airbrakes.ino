@@ -40,6 +40,8 @@ AirbrakesAccelerationMeasurement AirbrakesAccelerationMeasurement_init(float ts,
   return m;
 }
 
+HardwareTimer *myTim = new HardwareTimer(TIM1);
+
 /* ------------------ RocketStatus placeholder ------------------ */
 typedef struct {
   float altitude;        // m
@@ -106,6 +108,11 @@ AirbrakesVelocityMeasurement     velData[AIRBRAKES_N_MEASUREMENTS];
 int datIndex = 0;
 int counter  = 0;
 
+unsigned long startTime = millis();
+bool simEnabled = false;
+
+float globalDP;
+
 /* ------------------ Helpers (declare before use) ------------------ */
 
 float maxf(float a, float b) { return (a > b) ? a : b; }
@@ -148,15 +155,18 @@ bool inverse2x2Matrix(const float A[2][2], float Ainv[2][2]) {
 
 /* Flight time in seconds */
 float getFlightTime() {
-  return millis() * 0.001f;  // FIXED (seconds)
+  if (!simEnabled) {
+    return 0;
+  }
+  return (millis() - startTime) * 0.001f;  // FIXED (seconds)
 }
 
 /* actuator command */
 void setAirbrakesServo(float deployedFraction) {
   if (deployedFraction < 0.0f) deployedFraction = 0.0f;
   if (deployedFraction > 1.0f) deployedFraction = 1.0f;
-  // TODO: implement servo write
-  (void)deployedFraction;
+  Serial.println(deployedFraction);
+  globalDP = deployedFraction;
 }
 
 /* models */
@@ -432,7 +442,11 @@ void handleAirbrakesState() {
   }
   // Wait for the designated start time.
   else if (state == WAIT_FOR_START) {
-    if (getFlightTime() >= airbrakesCtrlStartTime) state = CONTROLLING_RAMP;
+    if (getFlightTime() >= airbrakesCtrlStartTime) {
+      state = CONTROLLING_RAMP;
+      Serial.println("[Airbrakes] Beginning control");
+    }
+    
   }
   // Ramp up
   else if (state == CONTROLLING_RAMP) {
@@ -457,11 +471,26 @@ void handleAirbrakesState() {
   // DONE / INFEASIBLE: do nothing
 }
 
+uint16_t deployToUs(float dp) {
+  return 1500 + (1.0 / .15) * (dp * 60.0);
+}
+
+void Update_IT_callback() {
+  myTim->setCaptureCompare(1, deployToUs(globalDP), MICROSEC_COMPARE_FORMAT);
+}
 
 
 
 /* ------------------ Arduino entry points ------------------ */
 void setup() {
+  //Serial.setTx(PA0);
+  //Serial.setRx(PA1);
+  myTim->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PA8);
+  myTim->setOverflow(20000, MICROSEC_FORMAT);
+  myTim->setCaptureCompare(1, deployToUs(0), MICROSEC_COMPARE_FORMAT);
+  myTim->attachInterrupt(Update_IT_callback);
+  myTim->resume();
+
   Serial.begin(115200);
   while (!Serial) { ; }
   Serial.println("Airbrakes controller starting...");
@@ -473,9 +502,9 @@ void loop() {
 
     // READ TELEMETRY
 
-    if (Serial.available() >= 11) {
+    if (Serial.available() >= 7) {
       if(Serial.peek() == 0xAA){
-        int n = 10; // size of the packet
+        int n = 6; // size of the packet
         uint8_t data[n+1];
         Serial.readBytes((char*)data, n+1);
         uint8_t checksum = 0;
@@ -484,8 +513,32 @@ void loop() {
         }
         if(checksum == data[n]){
           // proc start, vel/accel data, and apogee status.
+          switch (data[1]) {
+            case 0x00:
+              memcpy(&currentRocketVel, &data[2], 4);
+              break;
+            case 0x01:
+              memcpy(&currentRocketAccel, &data[2], 4);
+              break;
+            case 0x02:
+              memcpy(&apogeeReached, &data[2], 4);
+              break;
+            case 0x03:
+              simEnabled = true;
+              startTime = millis();
+          }
         }
+      } else {
+        Serial.read();
       }
+      /*
+      Serial.print("VELO: ");
+      Serial.println(currentRocketVel);
+      Serial.print("ACCEL: ");
+      Serial.println(currentRocketAccel);
+      Serial.print("APOGEE: ");
+      Serial.println(apogeeReached);
+      */
     }
 
     handleAirbrakesState();
