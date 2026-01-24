@@ -9,7 +9,7 @@
 
 /* ------------------ Compile-time constants ------------------ */
 #define AIRBRAKES_N_MEASUREMENTS         13
-#define AIRBRAKES_MEASUREMENT_FREQ_HZ     5
+#define AIRBRAKES_MEASUREMENT_FREQ_HZ     2.5
 #define AIRBRAKES_SIMULATION_T_APOG      34.0f
 #define DEBUG_AIRBRAKES_ON               0
 #define LOOP_FREQ                        100
@@ -107,6 +107,8 @@ AirbrakesVelocityMeasurement     velData[AIRBRAKES_N_MEASUREMENTS];
 /* counters */
 int datIndex = 0;
 int counter  = 0;
+
+unsigned long lastMeasurement = millis();
 
 unsigned long startTime = millis();
 bool simEnabled = false;
@@ -317,11 +319,14 @@ void handleAirbrakesState() {
       datIndex = 0;
       counter = 0;
       Serial.println("[Airbrakes] Entering PREP");
+      Serial.print("[Airbrakes] Current Time: ");
+      Serial.println(currentTime, 4);
     }
   }
 
   else if (state == PREP) {
-    if ((counter % everyHowMany) == 0) {
+    if ((millis() - lastMeasurement > (1000 / AIRBRAKES_MEASUREMENT_FREQ_HZ))) {
+      lastMeasurement = millis();
       if (datIndex < nMeasurements) {
         accelData[datIndex] = AirbrakesAccelerationMeasurement_init(currentTime, currentRocketAccel);
         velData[datIndex]   = AirbrakesVelocityMeasurement_init(currentTime, currentRocketVel);
@@ -334,12 +339,36 @@ void handleAirbrakesState() {
     if (datIndex >= nMeasurements) {
       state = PREPROCESS;
       counter = 0;
+
+      for (int i = 0; i < nMeasurements; i++) {
+        Serial.print("[Airbrakes] Data "); Serial.print(i); Serial.print(": Vel=");
+        Serial.print(velData[i].velocityMeasurement, 4);
+        Serial.print(" @ "); Serial.print(velData[i].timeStamp, 4);
+        Serial.print(" | Accel=");
+        Serial.print(accelData[i].accelerationMeasurement, 4);
+        Serial.print(" @ "); Serial.println(accelData[i].timeStamp, 4);
+      }
+
       Serial.println("[Airbrakes] Entering PREPROCESS (data collected)");
+      Serial.print("[Airbrakes] Current Time: ");
+      Serial.println(currentTime, 4);
     } else {
       state = shouldStartAirbrakesControlPreprocess() ? PREPROCESS : PREP;
       if (state == PREPROCESS) {
+
+        for (int i = 0; i < nMeasurements; i++) {
+          Serial.print("[Airbrakes] Data "); Serial.print(i); Serial.print(": Vel=");
+          Serial.print(velData[i].velocityMeasurement, 4);
+          Serial.print(" @ "); Serial.print(velData[i].timeStamp, 4);
+          Serial.print(" | Accel=");
+          Serial.print(accelData[i].accelerationMeasurement, 4);
+          Serial.print(" @ "); Serial.println(accelData[i].timeStamp, 4);
+        }
+        
         counter = 0;
         Serial.println("[Airbrakes] Entering PREPROCESS (time's up)");
+        Serial.print("[Airbrakes] Current Time: ");
+        Serial.println(currentTime, 4);
       }
     }
   }
@@ -445,6 +474,8 @@ void handleAirbrakesState() {
     if (getFlightTime() >= airbrakesCtrlStartTime) {
       state = CONTROLLING_RAMP;
       Serial.println("[Airbrakes] Beginning control");
+      Serial.print("[Airbrakes] Current Time: ");
+      Serial.println(currentTime, 4);
     }
     
   }
