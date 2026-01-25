@@ -11,7 +11,7 @@ HardwareSerial HWSerial(PA10, PA9);
 
 /* ------------------ Compile-time constants ------------------ */
 #define AIRBRAKES_N_MEASUREMENTS         13
-#define AIRBRAKES_MEASUREMENT_FREQ_HZ     2.3
+#define AIRBRAKES_MEASUREMENT_FREQ_HZ    2
 #define AIRBRAKES_SIMULATION_T_APOG      34.0f
 #define DEBUG_AIRBRAKES_ON               0
 #define LOOP_FREQ                        100
@@ -318,6 +318,7 @@ void handleAirbrakesState() {
 
   // DISABLED : awaiting start of prep (data collection)
   if (state == DISABLED) {
+    //HWSerial.print("[Airbrakes] Status:  DISABLED                 \r");
     state = shouldStartAirbrakesControlPrep() ? PREP : DISABLED;
     if (state == PREP) {
       datIndex = 0;
@@ -447,16 +448,16 @@ void handleAirbrakesState() {
 
     HWSerial.print("[Airbrakes] Velocity fit: a="); HWSerial.print(coeffA, 6);
     HWSerial.print(" b="); HWSerial.println(coeffB, 6);
-
+    HWSerial.print("[Airbrakes] Current Altitude: "); HWSerial.print(currentRocketAlt, 6);
+    HWSerial.print(" @ "); HWSerial.println(getFlightTime(), 6);
     alt0 = currentRocketAlt - getAltitudeEstimate(getFlightTime());
     predictedAlt = getAltitudeEstimate(t_apog);
 
     float desiredAlt = 6275.0f; //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
     desiredDeltaX = predictedAlt - desiredAlt;
-    HWSerial.print("Current Altitude: "); HWSerial.println(currentRocketAlt, 6);
-    HWSerial.print("Desired Altitude: "); HWSerial.println(desiredAlt, 6);
-    HWSerial.print("Predicted Altitude: "); HWSerial.println(predictedAlt, 6);
-    HWSerial.print("Aiming for ∆X Altitude: "); HWSerial.println(desiredDeltaX, 6);
+    HWSerial.print("[Airbrakes] Predicted Altitude: "); HWSerial.println(predictedAlt, 6);
+    HWSerial.print("[Airbrakes] Desired Altitude: "); HWSerial.println(desiredAlt, 6);
+    HWSerial.print("[Airbrakes] Aiming for ∆X in Altitude: "); HWSerial.println(desiredDeltaX, 6);
 
 
     bool tooLate = currentTime > AIRBRAKES_START_TIME - 0.25;
@@ -526,6 +527,7 @@ void Update_IT_callback() {
 void setup() {
   //HWSerial.setTx(PA0);
   //HWSerial.setRx(PA1);
+  //HWSerial.println("boi i'm starting up get hyped");
   myTim->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PA_8);
   myTim->setOverflow(20000, MICROSEC_FORMAT);
   myTim->setCaptureCompare(1, deployToUs(0), MICROSEC_COMPARE_FORMAT);
