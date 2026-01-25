@@ -450,8 +450,13 @@ void handleAirbrakesState() {
     alt0 = status.altitude - getAltitudeEstimate(getFlightTime());
     predictedAlt = getAltitudeEstimate(t_apog);
 
-    float desiredAlt = floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
+    float desiredAlt = 6275.0f; //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
     desiredDeltaX = predictedAlt - desiredAlt;
+    HWSerial.print("Current Altitude: "); HWSerial.println(status.altitude, 6);
+    HWSerial.print("Desired Altitude: "); HWSerial.println(desiredAlt, 6);
+    HWSerial.print("Predicted Altitude: "); HWSerial.println(predictedAlt, 6);
+    HWSerial.print("Aiming for ∆X Altitude: "); HWSerial.println(desiredDeltaX, 6);
+
 
     bool tooLate = currentTime > AIRBRAKES_START_TIME - 0.25;
     airbrakesCtrlStartTime = tooLate ? currentTime + AIRBRAKES_TIME_DELAY : AIRBRAKES_START_TIME;
@@ -468,7 +473,7 @@ void handleAirbrakesState() {
       }
     } else {
       HWSerial.println("[Airbrakes] Reaching Apogee is Feasible");
-      HWSerial.print("A0_req="); HWSerial.println(A0_req, 3);
+      HWSerial.print("[Airbrakes] A0_req="); HWSerial.println(A0_req, 3);
       HWSerial.print("[Airbrakes] Desired start time: "); HWSerial.println(airbrakesCtrlStartTime, 3);
       state = WAIT_FOR_START;
     }
@@ -520,7 +525,7 @@ void Update_IT_callback() {
 void setup() {
   //HWSerial.setTx(PA0);
   //HWSerial.setRx(PA1);
-  myTim->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PA8);
+  myTim->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PA_8);
   myTim->setOverflow(20000, MICROSEC_FORMAT);
   myTim->setCaptureCompare(1, deployToUs(0), MICROSEC_COMPARE_FORMAT);
   myTim->attachInterrupt(Update_IT_callback);
