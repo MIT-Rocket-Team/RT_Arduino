@@ -15,6 +15,7 @@ HardwareSerial HWSerial(PA1, PA0);
 #define AIRBRAKES_SIMULATION_T_APOG      34.0f
 #define DEBUG_AIRBRAKES_ON               0
 #define LOOP_FREQ                        100
+#define AIRBRAKES_START_TIME             13.0f // seconds
 
 /* ------------------ Measurements types ------------------ */
 typedef struct {
@@ -452,8 +453,9 @@ void handleAirbrakesState() {
     float desiredAlt = floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
     desiredDeltaX = predictedAlt - desiredAlt;
 
-    A0_req = reqDeployedAreaAirbrakes(currentTime + AIRBRAKES_TIME_DELAY, desiredDeltaX);
-    airbrakesCtrlStartTime = currentTime + AIRBRAKES_TIME_DELAY;
+    bool tooLate = currentTime > AIRBRAKES_START_TIME - 0.25;
+    airbrakesCtrlStartTime = tooLate : currentTime + AIRBRAKES_TIME_DELAY ? AIRBRAKES_START_TIME;
+    A0_req = reqDeployedAreaAirbrakes(airbrakesCtrlStartTime, desiredDeltaX);
 
     if (A0_req > 1.0f) {
       HWSerial.print("[Airbrakes] Req A="); HWSerial.print(A0_req, 3);
