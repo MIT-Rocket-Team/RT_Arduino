@@ -100,7 +100,7 @@ float A0_req = 0.0f;
 float currentRocketVel   = 0.0f;
 float currentRocketAccel = 0.0f;
 bool  apogeeReached      = false;
-float currentRocketAlt   = 0.0f;
+float currentRocketAlt   = 1.0f;
 
 float lastTimeStamp      = 0;
 
@@ -448,7 +448,7 @@ void handleAirbrakesState() {
     HWSerial.print("[Airbrakes] Velocity fit: a="); HWSerial.print(coeffA, 6);
     HWSerial.print(" b="); HWSerial.println(coeffB, 6);
 
-    alt0 = status.altitude - getAltitudeEstimate(getFlightTime());
+    alt0 = currentRocketAlt - getAltitudeEstimate(getFlightTime());
     predictedAlt = getAltitudeEstimate(t_apog);
 
     float desiredAlt = 6275.0f; //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
