@@ -70,9 +70,11 @@ AirbrakesControllerState state = DISABLED;
 
 const float g = 9.81f;
 
-float mass        = 51.75379038f;
-float rho         = 0.82826203f;
+float mass        = 39.140453380154554;
+float rho         = 0.736115423712237;
 float airbrakesCd = 1.28f;
+float rocketCd    = 0.5225681679119347f;
+float a_ref       = 0.019289796351014733f;
 float a_max       = 0.0066f;
 float fudge_factor   = 3.2f;
 float fudge_factor_2 = 3.5f;
@@ -95,6 +97,23 @@ float desiredDeltaX = 0.0f;
 
 float airbrakesCtrlStartTime = 1e10f;
 float A0_req = 0.0f;
+
+
+float Astar = 0.0f;
+float patchingAltitude = 0.0f;
+float velContribFudge = 1f;
+float cFudge = 0.825f;
+float K = 1;
+float factorK = 0.5f;
+float kp_factor = 2.5f;
+float ki_factor = 0.5f;
+
+float lastA = 0;
+float lastDeltaA = 0;
+float lastDeltaH = 0;
+float lastHf = 0;
+float lastI = 0;
+
 
 /* live rocket values !!! REPLACE IN LOOP W TELEMETRY */
 float currentRocketVel   = 0.0f;
@@ -120,6 +139,10 @@ bool simEnabled = false;
 float globalDP;
 
 /* ------------------ Helpers (declare before use) ------------------ */
+
+
+/* Fudge for Coeff of Drag from OpenRocket */
+float getCfudge(float alt) {  return 8.99999871e-06f*alt*alt - 1.10354984e-01f*alt + 3.38925325e+02f; }
 
 float maxf(float a, float b) { return (a > b) ? a : b; }
 
@@ -173,6 +196,11 @@ void setAirbrakesServo(float deployedFraction) {
   if (deployedFraction > 1.0f) deployedFraction = 1.0f;
   HWSerial.println(deployedFraction);
   globalDP = deployedFraction;
+}
+
+/* actuator reading */
+void getAirbrakesServo() {
+  return globalDP;
 }
 
 /* models */
@@ -299,6 +327,43 @@ bool shouldStartAirbrakesControlPreprocess() {
   return (getFlightTime() > START_AIRBRAKES_PREPROC_TIME) &&
          (!apogeeReached);
 }
+
+
+/* Conrad Altitude Estimate */
+float computeFinalAltitude_Conrad(float A, float h0, float v0) {
+  const float fudge_factor_conrad = 3.2f;
+  const float fudged_alt_diff = 13f;
+
+  float m = mass;
+  float c = rho*rocketCd*aRef/2.0f;
+  c *= cFudge;
+  float alpha = rho*airbrakesCd*A/2.0f;
+
+  // Fudging
+  alpha /= fudge_factor_conrad;
+
+  float hf = h0 + velContribFudge*m/(2.0*(alpha + c))*log((v0*v0*(alpha+c))/g/m+1);
+  return hf - fudged_alt_diff + patchingAltitude;
+}
+
+/* Compute Coefficient for control */
+float computeK(float Astar, float h0, float v0) {
+  const float fudge_factor_conrad = 3.2f;
+  const float fudged_alt_diff = 13f;
+
+  float m = mass;
+  float c = rho*rocketCd*aRef/2.0f;
+  float v0 = status.getRocketVelocity().z;
+  float alphaStar = rho*airbrakesCd*Astar/2.0f;
+
+  // Fudging
+  alphaStar /= fudge_factor_conrad;
+
+  float K0 = m/2 * (-1/(c+alphaStar)/(c+alphaStar) * log(v0*v0/g/m*(c+alphaStar)+1) + 1/(c+alphaStar)*v0*v0/g/m/(v0*v0/g/m*(c+alphaStar)+1));
+
+  return K0;
+}
+
 
 void handleAirbrakesState() {
   RocketStatus status;
@@ -455,6 +520,7 @@ void handleAirbrakesState() {
 
     float desiredAlt = 6275.0f; //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
     desiredDeltaX = predictedAlt - desiredAlt;
+    cFudge = getCfudge(desiredAlt);
     HWSerial.print("[Airbrakes] Predicted Altitude: "); HWSerial.println(predictedAlt, 6);
     HWSerial.print("[Airbrakes] Desired Altitude: "); HWSerial.println(desiredAlt, 6);
     HWSerial.print("[Airbrakes] Aiming for ∆X in Altitude: "); HWSerial.println(desiredDeltaX, 6);
@@ -463,6 +529,12 @@ void handleAirbrakesState() {
     bool tooLate = currentTime > AIRBRAKES_START_TIME - 0.25;
     airbrakesCtrlStartTime = tooLate ? currentTime + AIRBRAKES_TIME_DELAY : AIRBRAKES_START_TIME;
     A0_req = reqDeployedAreaAirbrakes(airbrakesCtrlStartTime, desiredDeltaX);
+
+    Astar = A0_req*a_max;
+    lastA = Astar;
+    K = computeK(Astar,currentRocketAlt,currentRocketVel)*factorK;
+
+
 
     if (A0_req > 1.0f) {
       HWSerial.print("[Airbrakes] Req A="); HWSerial.print(A0_req, 3);
@@ -480,6 +552,8 @@ void handleAirbrakesState() {
       state = WAIT_FOR_START;
     }
   }
+
+
   // Wait for the designated start time.
   else if (state == WAIT_FOR_START) {
     if (getFlightTime() >= airbrakesCtrlStartTime) {
@@ -504,7 +578,38 @@ void handleAirbrakesState() {
   }
   // plateau
   else if (state == CONTROLLING_PLATEAU) {
-    setAirbrakesServo(A0_req);
+
+    float Ki = ki_factor*2.0f/K;
+    float Kp = kp_factor/K;
+
+    lastA = getAirbrakesServo()*a_max;
+
+    lastDeltaA = lastA - Astar;
+
+    float current_hf = computeFinalAltitude_Conrad(lastA,currentRocketAlt,currentRocketVel);
+    if (patchingAltitude == 0) {
+      patchingAltitude = targetAlt-current_hf;
+      current_hf = computeFinalAltitude_Conrad(lastA,status);
+    }
+    lastDeltaH = current_hf - targetAlt;
+    lastHf = current_hf;
+
+    // decide integral term
+    float IofKplus1 = 0.0f;
+    if (((lastA >= 1.0f) && (lastDeltaH >= 0.0f)) ||
+            (lastA <= 1e-5f) && (lastDeltaH < 0.0f)) {
+        IofKplus1 = lastI;
+    }
+    else {
+        IofKplus1 = lastI + 2.0f/K*lastDeltaH;
+    }
+    lastI = IofKplus1;
+
+    float nextDeltaA = Kp*lastDeltaH + Ki*lastI;
+    float nextA = Astar + nextDeltaA;
+    setAirbrakesServo(nextA/a_max);
+
+
     if (status.vel_z <= 0.0f || status.apogeeReached) {
       state = DONE;
       setAirbrakesServo(0.0f);
