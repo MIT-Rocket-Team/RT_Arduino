@@ -1,5 +1,5 @@
 /// C Arduino Airbrakes Controller Code
-// MARC D. NICHITIU írta
+// MARC D. NICHITIU irta
 // MIT RT SIMULATIONS JAN 2026
 
 
