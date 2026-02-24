@@ -8,11 +8,25 @@
 
 #define APRS_MSG "!4221.39N/07105.71W>STM32 APRS Tracker"
 
-#define SAMPLE_RATE 9600
+#define SAMPLE_RATE 9600//38400
 #define BAUD 1200
-#define BEACON_INTERVAL 60000   // ms
+#define BEACON_INTERVAL 5000   // ms
 
 /********************************/
+
+HardwareSerial radio(PA10, PA9); // RX, TX
+
+void configDRA818()
+{
+  radio.begin(9600);
+  delay(500);
+
+  radio.println(
+    "AT+DMOSETGROUP=0,144.3900,144.3900,0000,1,0000"
+  );
+
+  delay(200);
+}
 
 HardwareTimer *timer;
 
@@ -54,14 +68,22 @@ uint16_t crc_ccitt(uint8_t *data,int len)
 
 /******** AX25 ADDRESS ********/
 
-void encodeCall(uint8_t *out,const char *call,
-                uint8_t ssid,bool last)
+void encodeCall(uint8_t *out,
+                const char *call,
+                uint8_t ssid,
+                bool last)
 {
-  for(int i=0;i<6;i++)
-    out[i]=(call[i]?call[i]:' ')<<1;
+  int len = strlen(call);
 
-  out[6]=((ssid&0x0F)<<1)|0x60;
-  if(last) out[6]|=1;
+  for(int i=0;i<6;i++){
+    char c = (i < len) ? toupper(call[i]) : ' ';
+    out[i] = c << 1;
+  }
+
+  out[6] = ((ssid & 0x0F) << 1) | 0x60;
+
+  if(last)
+    out[6] |= 0x01;
 }
 
 /******** BIT ADD ********/
@@ -93,7 +115,10 @@ void addByte(uint8_t b)
 
 void addFlag()
 {
-  uint8_t f=0x7E;
+  uint8_t f = 0x7E;
+
+  ones = 0;
+
   for(int i=0;i<8;i++)
     addRawBit((f>>i)&1);
 }
@@ -102,6 +127,7 @@ void addFlag()
 
 void buildPacket()
 {
+  Serial.println("BP");
   uint8_t frame[256];
   int idx=0;
 
@@ -117,6 +143,8 @@ void buildPacket()
   encodeCall(frame+idx,"WIDE2",1,true);
   idx+=7;
 
+  Serial.println("BP1");
+
   frame[idx++]=0x03;
   frame[idx++]=0xF0;
 
@@ -130,15 +158,30 @@ void buildPacket()
   bitLen=0;
   ones=0;
 
+  Serial.println("BP2");
+
   for(int i=0;i<60;i++)
     addFlag();
 
+  ones = 0;
   for(int i=0;i<idx;i++)
     addByte(frame[i]);
 
   addFlag();
 
+  Serial.println("BP3");
+
+  //Serial.write(frame, idx);
+  for(int i=0;i<idx;i++){
+  if(frame[i] < 16) Serial.print("0");
+    Serial.print(frame[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
   bitPos=0;
+  digitalWrite(PB2, 0);
+  delay(200);
   transmitting=true;
 }
 
@@ -148,6 +191,7 @@ void nextBit()
 {
   if(bitPos>=bitLen){
     transmitting=false;
+    digitalWrite(PB2, 1);
     return;
   }
 
@@ -164,22 +208,38 @@ void nextBit()
 void audioISR()
 {
   if(transmitting){
-    if(++sampleCount>=samplesPerBit){
-      sampleCount=0;
+    if(++sampleCount >= samplesPerBit){
+      sampleCount = 0;
       nextBit();
     }
+
+    phase += currentInc;
+    uint8_t idx = phase >> 24;
+    analogWrite(PA4, sineTable[idx] >> 4);
   }
-
-  phase+=currentInc;
-  uint8_t idx=phase>>24;
-
-  analogWrite(PA4,sineTable[idx]>>4);
+  else{
+    analogWrite(PA4, 128);   // silence (midpoint)
+  }
 }
 
 /******** SETUP ********/
 
 void setup()
 {
+  pinMode(PB2, OUTPUT);
+  digitalWrite(PB2, 1);
+  pinMode(PB3, OUTPUT);
+  digitalWrite(PB3, 1);
+
+  Serial.begin(115200);
+  delay(5000);
+  Serial.println("BOOT");
+
+  configDRA818();
+  delay(1000);
+  while(radio.available()) {
+    Serial.write(radio.read());
+  }
   analogWriteResolution(8);
 
   for(int i=0;i<SINE_SIZE;i++)
@@ -190,10 +250,15 @@ void setup()
 
   currentInc=incMark;
 
-  timer=new HardwareTimer(TIM6);
+  timer=new HardwareTimer(TIM2);
   timer->setOverflow(SAMPLE_RATE,HERTZ_FORMAT);
   timer->attachInterrupt(audioISR);
   timer->resume();
+  //Serial.begin(115200);
+  //delay(5000);
+  //Serial.println("BOOT");
+  //transmitting = true;
+  buildPacket();
 }
 
 /******** LOOP ********/
