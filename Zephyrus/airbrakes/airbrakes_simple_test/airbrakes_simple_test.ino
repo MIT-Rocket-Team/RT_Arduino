@@ -10,7 +10,17 @@ float servoAngle = 0;
 HardwareTimer *myTim = new HardwareTimer(TIM1);
 
 void setAirbrakesServo(float fraction) {
-  servoAngle = (210.0f*fraction)-120.0f;
+  if (fraction < 0) {
+    fraction = 0.0f;
+  }
+  servoAngle = (-150.0f*fraction)-20.0f;
+}
+
+void setAirbrakesServoHalf(float fraction) {
+  if (fraction < 0.5f) {
+    fraction = 0.5f;
+  }
+  servoAngle = (-150.0f*fraction)-20.0f;
 }
 
 uint16_t degToUs(float deg) {
@@ -51,7 +61,7 @@ void loop() {
       Serial.print("Back to manual.");
       return;
     }
-    setAirbrakesServo(deployedFraction);
+    setAirbrakesServoHalf(deployedFraction);
   }
   else {
     //Serial.println(servoAngle);
@@ -67,7 +77,13 @@ void loop() {
       } else {
         Serial.println("Invalid input ! Enter diff bruh.");
       }
-      if (angle > 200) {
+      if (angle >= 500) {
+        A0_req = ((float) angle - 500.0f)/100.0f;
+        Serial.println("Going to fraction between 500 and 600...");
+        setAirbrakesServo(A0_req);
+        Serial.print("Done");
+      }
+      else if (angle > 200) {
         mode = 1;
         A0_req = ((float) angle - 200.0f)/100.0f;
         Serial.println("Preparing Ramp...");
@@ -77,6 +93,8 @@ void loop() {
         Serial.print("Starting Ramp at ");
         Serial.println(airbrakesCtrlStartTime);
       }
+
+      
     }
   }
 
