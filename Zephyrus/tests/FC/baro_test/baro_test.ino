@@ -26,7 +26,7 @@ void setup() {
   pinMode(PD4, OUTPUT);
   digitalWrite(PD4, 1);
   SPI_3.begin();
-  baro.begin();
+  myBaro.begin();
   delay(100);
   debugSer.begin(115200);
   debugSer.println("Calibration Values:");
@@ -36,6 +36,7 @@ void setup() {
     debugSer.print(": ");
     debugSer.println(myBaro.getCalibrationConstant(i), HEX);
   }
+  delay(1000);
 }
 
 void loop() {
