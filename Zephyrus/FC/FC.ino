@@ -7,6 +7,7 @@
 #include <cam.h>
 #include <vtx.h>
 #include <pyro.h>
+#include <GPS.h>
 
 
 #define MOSI PD7
@@ -39,8 +40,8 @@ flash flashMem(&SPI_3, settings, FLASH_CS);
 
 cam cam0(&CAM0_SER);
 cam cam1(&CAM1_SER);
-cam cam2(&CAM2_SER);
 vtx myVTX(&VTX_SER);
+GPS gps(&gpsSer);
 
 pyro pyros;
 
@@ -64,29 +65,184 @@ State currentState = GROUND_TESTING;
 
 State recState = GROUND_TESTING;
 
+uint32_t loopBegin;
+uint32_t lastTelem;
+
+uint16_t pyroStatus;
+int8_t rxrssi;
+unsigned long lastRec;
+uint16_t packetNum;
+uint8_t badPackets;
+
 
 void setup() {
   // put your setup code here, to run once:
-  delay(100);
-
   pinMode(MAG_CS, OUTPUT); //Remove when mag library added
   digitalWrite(MAG_CS, 1); //Remove when mag library added
+  pyros.begin();
 
   SPI_3.begin();
+  debugSer.begin(115200);
 
-  pyros.begin();
+  delay(100);
+
+  cc.begin();
+  cc.simpleConfig();
   accel.setup();
   barometer.begin();
   mygyro.begin();
   mygyro.config();
   flashMem.begin();
-  myVTX.begin();
+
   cam0.begin();
   cam1.begin();
-  cam2.begin();
-  cc.begin();
-  cc.simpleConfig();
+  myVTX.begin();
+  gps.begin();
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  loopBegin = millis();
+  barometer.updateRawTemp();
+  barometer.updateRawPress();
+  accel.update();
+  mygyro.update();
+  gps.update();
+  updatePyros();
+
+
+  //to-do: state machine
+  //to-do: flash logging handler
+  //to-do: power board handler
+
+  if (millis() - lastTelem > 50) {
+    lastTelem = millis();
+    constructTelemetryPacket();
+    sendTelemetryPacket();
+    debugSer.println(pyroStatus);
+  }
+  readTelem();
+
+  while (millis() - loopBegin < 10) {}
+}
+
+
+///////////////////////////////////////////////////
+//                      Pyros                    //
+///////////////////////////////////////////////////
+
+void updatePyros() {
+  for (uint8_t i = 0; i < 6; i++) {
+    PyroStatus toSet = pyros.connected(i) ? PYRO_CONNECTED : PYRO_UNCONNECTED;
+    setPyroStatus(i, toSet);
+  }
 
 }
-void loop() {
+
+void setPyroStatus(uint8_t channel, PyroStatus val) {
+  uint16_t mask = 0b11 << (channel * 2);
+  pyroStatus &= ~mask;
+  pyroStatus |= (val & 0b11) << (channel * 2);
+}
+///////////////////////////////////////////////////
+//                    Telemetry                  //
+///////////////////////////////////////////////////
+uint8_t telemPkt[128];
+void constructTelemetryPacket() {
+  memcpy(&telemPkt[0], &pyroStatus, 2);
+
+  uint16_t gyrorawX = mygyro.getRawX();
+  uint16_t gyrorawY = mygyro.getRawY();
+  uint16_t gyrorawZ = mygyro.getRawZ();
+  memcpy(&telemPkt[35], &gyrorawX, 2);
+  memcpy(&telemPkt[37], &gyrorawY, 2);
+  memcpy(&telemPkt[39], &gyrorawZ, 2);
+
+  uint32_t barorawTemp = barometer.getRawTemp();
+  memcpy(&telemPkt[23], &barorawTemp, 3);
+
+  uint8_t armed_byte = 0;
+  for(uint8_t i = 0; i < 6; i++) {
+    armed_byte |= pyros.isArmed(i) << i;
+  }
+  memcpy(&telemPkt[103], &armed_byte, 1);
+
+  uint8_t fired_byte = 0;
+  for(uint8_t i = 0; i < 6; i++) {
+    fired_byte |= pyros.isFired(i) << i;
+  }
+  memcpy(&telemPkt[104], &fired_byte, 1);
+  
+  telemPkt[127] = calcChecksum();
+}
+
+uint8_t calcChecksum() {
+  uint8_t sum = 0;
+  for(int i = 0; i < 127; i++) {
+    sum += telemPkt[i];
+  }
+  return sum;
+}
+
+void sendTelemetryPacket() {
+  if (cc.status() == 7) {
+    cc.flushTx();
+  }
+  cc.Tx(telemPkt, 128);
+}
+
+void readTelem() {
+  if(cc.status() == 0) {
+    cc.Rx(16);
+  }
+  if(cc.avail() >= 16) {
+    lastRec = millis();
+    byte recBuf[16];
+    cc.read(recBuf, 16);
+    rxrssi = cc.rssi();
+      if(recBuf[0] == 0xAA) {
+      uint16_t chksum = 0;
+      for (int i = 1; i < 14; i++) {
+        chksum += recBuf[i];
+      }
+
+      if (chksum == (recBuf[14] << 8) + recBuf[15]) {
+        bool recValid = true;
+        switch (recBuf[13]) {
+          case 0x01:
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              for(uint8_t i = 0; i < 8; i++) {
+                if ((recBuf[12] >> i) & 0b1) {
+                  pyros.arm(i);
+                }
+              }
+            }
+            break;
+          case 0x06:
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              for(uint8_t i = 0; i < 8; i++) {
+                if ((recBuf[12] >> i) & 0b1) {
+                  pyros.fire(i);
+                }
+              }
+            }
+            break;
+        }
+      } else {
+        badPackets++;
+      }
+    } else {
+      badPackets++;
+    }
+  }
 }
