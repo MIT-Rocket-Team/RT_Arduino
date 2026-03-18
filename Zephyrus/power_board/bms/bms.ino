@@ -1,20 +1,10 @@
 #include "BQ76922.h"
 #include "Wire.h"
+#include "myTypes.h"
 
 HardwareSerial pwrSer(PA1, PA0);
 
 BQ76922 bms;
-
-typedef struct __attribute__((packed))
-{
-  int16_t cell1;
-  int16_t cell2;
-  int16_t cell3;
-  int16_t stackVoltage;
-  int16_t current;
-  float temp;
-  uint8_t fetStatus;
-} bmsData;
 
 bmsData pkt;
 

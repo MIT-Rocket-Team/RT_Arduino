@@ -28,6 +28,7 @@ HardwareSerial CAM0_SER(PE7, PE8);
 HardwareSerial CAM1_SER(PE0, PE1);
 HardwareSerial CAM2_SER(PB15, PB14);
 HardwareSerial VTX_SER(PA12);
+HardwareSerial pwrSer(PB11, PB10);
 
 
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
@@ -58,6 +59,9 @@ unsigned long lastRec;
 uint16_t packetNum;
 uint8_t badPackets;
 
+pwrBoardData powerPkt;
+uint8_t tmp[sizeof(powerPkt)];
+
 HardwareTimer *myTim = new HardwareTimer(TIM4);
 
 void setup() {
@@ -73,6 +77,7 @@ void setup() {
 
   SPI_3.begin();
   debugSer.begin(115200);
+  pwrSer.begin(115200);
 
   delay(100);
 
@@ -99,6 +104,7 @@ void loop() {
   mygyro.update();
   gps.update();
   pyros.update(currentState);
+  updatePowerPacket();
 
 
   //to-do: state machine
@@ -113,6 +119,29 @@ void loop() {
   readTelem();
 
   while (millis() - loopBegin < 10) {}
+}
+
+///////////////////////////////////////////////////
+//                  Power Board                  //
+///////////////////////////////////////////////////
+//to-do: move to library
+void updatePowerPacket() {
+  while (pwrSer.available() >= sizeof(powerPkt) + 2) {
+    if (pwrSer.read() == 0xAA) {
+      pwrSer.readBytes(tmp, sizeof(powerPkt));
+      if (pwrSer.read() == calcChecksum(tmp, sizeof(powerPkt))) {
+        memcpy(&powerPkt, tmp, sizeof(powerPkt));    
+      } 
+    }
+  }
+}
+
+uint8_t calcChecksum(uint8_t* p, uint8_t len) {
+  uint8_t ret = 0;
+  for (uint8_t i = 0; i < 15; i++) {
+    ret += *(p + i);
+  }
+  return ret;
 }
 
 ///////////////////////////////////////////////////
@@ -139,17 +168,26 @@ void constructTelemetryPacket() {
 
   //GPS
   uint8_t gpsFix = gps.getFixType();
-  uint32_t lat = gps.getLat();
-  uint32_t lon = gps.getLon();
+  int32_t lat = gps.getLat();
+  int32_t lon = gps.getLon();
   uint32_t alt = gps.getHeight();
   uint32_t hACC = gps.getHAcc();
   uint32_t vACC = gps.getVAcc();
+  uint8_t numSat = gps.getNumSV();
 
   memcpy(&telemPkt[41], &gpsFix, 1);
   memcpy(&telemPkt[42], &lat, 4);
   memcpy(&telemPkt[46], &lon, 4);
   memcpy(&telemPkt[50], &alt, 4);
+  memcpy(&telemPkt[54], &hACC, 4);
+  memcpy(&telemPkt[58], &vACC, 4);
+  memcpy(&telemPkt[62], &numSat, 1);
 
+  memcpy(&telemPkt[74], &powerPkt.BMS.cell1, 2);
+  memcpy(&telemPkt[76], &powerPkt.BMS.cell2, 2);
+  memcpy(&telemPkt[78], &powerPkt.BMS.cell3, 2);
+  memcpy(&telemPkt[80], &powerPkt.BMS.current, 2);
+  memcpy(&telemPkt[82], &powerPkt.voltages, 24);
 
   uint8_t armed_byte = 0;
   for(uint8_t i = 0; i < 6; i++) {

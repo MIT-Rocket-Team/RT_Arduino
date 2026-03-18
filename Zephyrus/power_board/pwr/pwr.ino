@@ -1,6 +1,7 @@
 #include <SoftwareSerial.h>
 #include <Wire.h>
 #include <INA232.h>
+#include <myTypes.h>
 
 #define EN0 PB0
 #define EN1 PB1
@@ -8,9 +9,9 @@
 #define EN3 PB4
 #define EN4 PB5
 
-SoftwareSerial bmsSer(PB8,PB7);
+SoftwareSerial bmsSer(PB8, PB7);
 HardwareSerial debugSer(PA3, PA2);
-HardwareSerial FCSer()
+HardwareSerial FCSer(PA1, PA0);
 
 TwoWire Wire1(PA6,PA7);
 TwoWire Wire2(PC14,PB6);
@@ -25,24 +26,6 @@ INA232 monitor8v4(&Wire1, 0b1000010);
 
 INA232 monitors[] = {monitor3v, monitor3v3, monitor5v, monitor7v4, monitor8v4, monitor28v};
 
-typedef struct __attribute__((packed))
-{
-  int16_t cell1;
-  int16_t cell2;
-  int16_t cell3;
-  int16_t stackVoltage;
-  int16_t current;
-  float temp;
-  uint8_t fetStatus;
-} bmsData;
-
-typedef struct __attribute__((packed))
-{
-  bmsData BMS;
-  int16_t voltages[6];
-  int16_t currents[6];
-} pwrBoardData;
-
 pwrBoardData powerPkt;
 
 uint8_t tmp[15];
@@ -56,6 +39,7 @@ void setup() {
     digitalWrite(enables[i], 1);
   }
   bmsSer.begin(9600);
+  FCSer.begin(115200);
   debugSer.begin(115200);
   debugSer.println("BOOT");
 
@@ -82,8 +66,11 @@ void loop() {
     powerPkt.currents[i] = monitors[i].currentRaw();
     powerPkt.voltages[i] = monitors[i].voltageRaw();
   }
-  
-  delay(1000);
+
+  FCSer.write(0xAA);
+  FCSer.write((uint8_t*) &powerPkt, sizeof(powerPkt));
+  FCSer.write(calcChecksum((uint8_t*) &powerPkt, sizeof(powerPkt)));
+  delay(100);
 }
 
 uint8_t calcChecksum(uint8_t* p, uint8_t len) {
