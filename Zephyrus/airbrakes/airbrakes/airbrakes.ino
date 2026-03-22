@@ -1,6 +1,6 @@
 /// C Arduino Airbrakes Controller Code
 // MARC D. NICHITIU irta
-// MIT RT SIMULATIONS JAN 2026
+// MIT RT SIMULATIONS MARCH 2026
 
 
 
@@ -10,9 +10,9 @@
 HardwareSerial HWSerial(PA10, PA9);
 
 /* ------------------ Compile-time constants ------------------ */
-#define AIRBRAKES_N_MEASUREMENTS 13
-#define AIRBRAKES_MEASUREMENT_FREQ_HZ 2
-#define AIRBRAKES_SIMULATION_T_APOG 34.0f
+#define AIRBRAKES_N_MEASUREMENTS 20
+#define AIRBRAKES_MEASUREMENT_FREQ_HZ 5
+#define AIRBRAKES_SIMULATION_T_APOG 35.0f
 #define DEBUG_AIRBRAKES_ON 0
 #define LOOP_FREQ 100
 #define AIRBRAKES_START_TIME 13.0f  // seconds
@@ -70,10 +70,10 @@ AirbrakesControllerState state = DISABLED;
 
 const float g = 9.81f;
 
-float mass = 39.140453380154554;
-float rho = 0.736115423712237;
+float mass = 34.15380231015455f;
+float rho = 0.736115423712237f;
 float airbrakesCd = 1.28f;
-float rocketCd = 0.5225681679119347f;
+float rocketCd = 0.4843927669074317f;
 float a_ref = 0.019289796351014733f;
 float a_max = 0.0066f;
 float fudge_factor = 3.2f;
@@ -105,8 +105,6 @@ float velContribFudge = 1.0f;
 float cFudge = 0.825f;
 float K = 1;
 float factorK = 0.5f; // not actually a fudge factor.
-float kp_factor = 2.5f;
-float ki_factor = 0.5f;
 
 float lastA = 0;
 float lastDeltaA = 0;
@@ -352,6 +350,8 @@ float getAltitudeEstimate(float t) {
   return getAltitudeEstimate(t, alt0);
 }
 
+
+
 /* start conditions */
 bool shouldStartAirbrakesControlPrep() {
   HWSerial.print("Flight time: ");
@@ -371,15 +371,14 @@ float computeFinalAltitude_Conrad(float A, float h0, float v0) {
   const float fudge_factor_conrad = 3.2f;
   const float fudged_alt_diff = 13.0f;
 
+  A /= 0.875;
+
   float m = mass;
   float c = rho * rocketCd * a_ref / 2.0f;
   c *= cFudge;
   float alpha = rho * airbrakesCd * A / 2.0f;
 
-  // Fudging
-  alpha /= fudge_factor_conrad;
-
-  float hf = h0 + velContribFudge * m / (2.0 * (alpha + c)) * log((v0 * v0 * (alpha + c)) / g / m + 1);
+  float hf = h0 + velContribFudge * m / (2.0f * (alpha + c)) * log((v0 * v0 * (alpha + c)) / g / m + 1.0f);
   return hf - fudged_alt_diff + patchingAltitude;
 }
 
@@ -397,7 +396,7 @@ float computeK(float Astar, float h0, float v0) {
 
   float K0 = m / 2 * (-1 / (c + alphaStar) / (c + alphaStar) * log(v0 * v0 / g / m * (c + alphaStar) + 1) + 1 / (c + alphaStar) * v0 * v0 / g / m / (v0 * v0 / g / m * (c + alphaStar) + 1));
 
-  return K0;
+  return K0/2.0f;
 }
 
 
@@ -564,13 +563,18 @@ void handleAirbrakesState() {
     HWSerial.print(currentRocketAlt, 6);
     HWSerial.print(" @ ");
     HWSerial.println(getFlightTime(), 6);
-    alt0 = currentRocketAlt - getAltitudeEstimate(getFlightTime());
-    predictedAlt = getAltitudeEstimate(t_apog);
+    // OLD LOGIC
+    //alt0 = currentRocketAlt - getAltitudeEstimate(getFlightTime());
+    //predictedAlt = getAltitudeEstimate(t_apog);
 
-    float desiredAlt = 6275.0f;  //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
+    float desiredAlt = 4550.0f;  //floorf(predictedAlt / (float)roundToHowMuch) * (float)roundToHowMuch;
+    float conrad_predict = computeFinalAltitude_Conrad(0,status.altitude,status.vel_z);
+    patchingAltitude = 4637 - conrad_predict;
+    conrad_predict = computeFinalAltitude_Conrad(0,status.altitude,status.vel_z);
+    predictedAlt = conrad_predict;
+    alt0 = predictedAlt;
     targetAlt = desiredAlt;
     desiredDeltaX = predictedAlt - desiredAlt;
-    cFudge = getCfudge(desiredAlt);
     HWSerial.print("[Airbrakes] Predicted Altitude: ");
     HWSerial.println(predictedAlt, 6);
     HWSerial.print("[Airbrakes] Desired Altitude: ");
@@ -585,7 +589,7 @@ void handleAirbrakesState() {
 
     Astar = A0_req * a_max;
     lastA = Astar;
-    K = computeK(Astar, currentRocketAlt, currentRocketVel) * factorK;
+    K = computeK(Astar, currentRocketAlt, currentRocketVel);
 
 
 
@@ -631,12 +635,16 @@ void handleAirbrakesState() {
       state = CONTROLLING_PLATEAU;
       setAirbrakesServo(A0_req);
     }
+    if (status.apogeeReached) {
+      state = DONE;
+      setAirbrakesServo(0.0f);
+    }
   }
   // plateau
   else if (state == CONTROLLING_PLATEAU) {
 
-    float Ki = ki_factor * 2.0f / K;
-    float Kp = kp_factor / K;
+    float Ki = 2.0f / K;
+    float Kp = 1.0f / K;
 
     lastA = getAirbrakesServo() * a_max;
 
@@ -672,6 +680,8 @@ void handleAirbrakesState() {
   // DONE / INFEASIBLE: do nothing
 }
 
+
+// NEEDS CHECKING as of March 22
 uint16_t deployToUs(float dp) {
   return 1500 + (1.0 / .15) * (dp * 80.0 - 40.0);
 }
