@@ -256,7 +256,7 @@ void constructTelemetryPacket() {
 
   //Accel
   int32_t accelRawX = accel.getRawX();
-  int32_t accelRawY = accel.getRawZ();
+  int32_t accelRawY = accel.getRawY();
   int32_t accelRawZ = accel.getRawZ();
   memcpy(&telemPkt[16], &accelRawX, 3);
   memcpy(&telemPkt[19], &accelRawY, 3);
