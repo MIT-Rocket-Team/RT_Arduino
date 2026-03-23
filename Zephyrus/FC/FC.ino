@@ -111,7 +111,6 @@ void loop() {
 
   FCtime = millis();
   handleState();
-  handleBP();
 
   //to-do: state machine
   //to-do: flash logging handler
@@ -129,13 +128,12 @@ void loop() {
 //                  State Machine                //
 ///////////////////////////////////////////////////
 #define ACCEL_FLIGHT_THRESHOLD   30    //m/s^2
-#define T_APOGEE_LOCKOUT         7000  //msec
-#define T_APOGEE_OVERRIDE        13000 //msec
-#define T_BP_LOCKOUT             7000  //msec
-#define T_MAIN_LOCKOUT           2000  //msec (PAST T_APOGEE)
+#define T_APOGEE_LOCKOUT         27000 //msec
+#define T_APOGEE_OVERRIDE        35000 //msec
+#define T_BP_DEPLOY              5000  //msec (PAST T_APOGEE)
+#define T_MAIN_LOCKOUT           55000 //msec (PAST T_APOGEE)
 #define APOGEE_DROP              20    //m
 #define MAIN_DEPLOY_ALT          457   //m (AGL)
-#define BP_ALT_THRESHOLD         304   //m (AGL)
 
 uint32_t flightBeginTime;              //time flight mode entered
 uint32_t apogeeTime;                   //time apogee reached
@@ -188,6 +186,12 @@ void handleState() {
       }
       break;
     case APOGEE:                                                                              //If we are in apogee state
+      if (FCtime - apogeeTime > T_BP_DEPLOY) {                                                  //If we are more than some amound past apogee
+        for (uint8_t i = 3; i < 5; i++) {                                                         //Fire Pyros 3, 4
+          pyros.arm(i);
+          pyros.fire(i);
+        }
+      }
       if (FCtime - apogeeTime > T_MAIN_LOCKOUT) {                                               //If we are past main lockout time
         if (recState == MAIN ||                                                                   //If we recieve signal to enter main state
         (gps.getFixType() == 3 && gps.getHeight() < MAIN_DEPLOY_ALT) ||                           //Or If we have 3D GPS fix and are less than some amount AGL
@@ -208,17 +212,6 @@ void handleState() {
   }
 }
 
-void handleBP() {
-  if ((currentState > PRE_FLIGHT) && (FCtime - flightBeginTime > T_BP_LOCKOUT)) {             //If we are past pre-flight mode and we are past BP lockout timer
-    if ((gps.getFixType() == 3 && gps.getHeight() < BP_ALT_THRESHOLD) &&                        //If we have 3D GPS fix and are less than some amount AGL
-    (barometer.getFilteredAltitude() < BP_ALT_THRESHOLD)) {                                     //And If the barometer says we are less than some amount AGL
-      for (uint8_t i = 3; i < 5; i++) {                                                         //Fire Pyros 3, 4
-        pyros.arm(i);
-        pyros.fire(i);
-      }
-    }
-  }
-}
 
 ///////////////////////////////////////////////////
 //                    Telemetry                  //
