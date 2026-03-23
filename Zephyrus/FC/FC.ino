@@ -197,7 +197,7 @@ void handleState() {
       }
       break;
     case APOGEE:                                                                              //If we are in apogee state
-      if (FCtime - apogeeTime > T_BP_DEPLOY && !bpFired) {                                        //If we are more than some amound past apogee
+      if (FCtime - apogeeTime > T_BP_DEPLOY && !bpFired) {                                      //If we are more than some amount past apogee
         for (uint8_t i = 3; i < 5; i++) {                                                         //Fire Pyros 3, 4
           pyros.arm(i);
           pyros.fire(i);
