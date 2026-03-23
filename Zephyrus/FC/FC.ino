@@ -147,7 +147,7 @@ void loop() {
 
 uint32_t flightBeginTime;              //time flight mode entered
 uint32_t apogeeTime;                   //time apogee reached
-//uint32_t FCTime;                     //time handleState called (msec); initialized earlier
+//uint32_t FCtime;                     //time handleState called (msec); initialized earlier
 //State recState;                      //state recieved from ground station if manually advanced; initialized earlier
 //State currentState;                  //state rocket is in; initialized earlier
 
@@ -451,7 +451,7 @@ uint16_t degToUsAirbrakes(float degrees) {
   return 1500.0 + (degrees / 60.0) * 500.0; 
 }
 
-uint16_t dpToDeg(float dp) {
+float dpToDeg(float dp) {
   return (AIRBRAKES_OPEN_ANGLE - AIRBRAKES_CLOSED_ANGLE) * dp + AIRBRAKES_CLOSED_ANGLE;
 }
 
