@@ -75,7 +75,7 @@ void loop() {
 
 uint8_t calcChecksum(uint8_t* p, uint8_t len) {
   uint8_t ret = 0;
-  for (uint8_t i = 0; i < 15; i++) {
+  for (uint8_t i = 0; i < len; i++) {
     ret += *(p + i);
   }
   return ret;
