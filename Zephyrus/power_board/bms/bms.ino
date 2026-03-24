@@ -43,6 +43,8 @@ void loop() {
   pkt.current = bms.current();
   pkt.temp = bms.temp();
   pkt.fetStatus = bms.fetStatus();
+  pkt.protectionStatus = bms.safetyStatusA();
+  pkt.protectionsEnabled = bms.enabledProtectionsA();
 
   pwrSer.write(0xAA);
   pwrSer.write((uint8_t*) &pkt, sizeof(pkt));
