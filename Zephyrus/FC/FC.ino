@@ -10,6 +10,7 @@
 #include <GPS.h>
 #include <power.h>
 #include <airbrakes.h>
+#include <rollcontrol.h>
 
 #include <myTypes.h>
 
@@ -51,6 +52,7 @@ GPS gps(&gpsSer);
 power pwr(&pwrSer);
 
 airbrakes myairbrakes;
+rollcontrol myrollcontrol;
 
 pyro pyros;
 
@@ -68,6 +70,8 @@ unsigned long lastRec;
 uint16_t packetNum;
 uint8_t badPackets;
 
+uint32_t flightBeginTime;
+
 pwrBoardData powerPkt;
 uint8_t tmp[sizeof(powerPkt)];
 
@@ -80,8 +84,12 @@ void setup() {
   pyros.begin();
 
   myTim->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PD12);
+  myTim->setMode(3, TIMER_OUTPUT_COMPARE_PWM1, PD14);
+  myTim->setMode(4, TIMER_OUTPUT_COMPARE_PWM1, PD15);
   myTim->setOverflow(20000, MICROSEC_FORMAT);
   myTim->setCaptureCompare(1, degToUsAirbrakes(AIRBRAKES_CLOSED_ANGLE), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(3, degToUsRollControl(0), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(4, degToUsRollControl(0), MICROSEC_COMPARE_FORMAT);
   myTim->attachInterrupt(Update_IT_callback);
   myTim->resume();
 
@@ -105,6 +113,7 @@ void setup() {
   pwr.begin();
 
   myairbrakes.begin();
+  myrollcontrol.begin();
 }
 
 void loop() {
@@ -119,6 +128,8 @@ void loop() {
 
   FCtime = millis();
   handleState();
+  myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
+                    accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
   updateAirbrakes();
 
   //to-do: state machine
@@ -145,7 +156,7 @@ void loop() {
 #define APOGEE_DROP              20    //m
 #define MAIN_DEPLOY_ALT          457   //m (AGL)
 
-uint32_t flightBeginTime;              //time flight mode entered
+//uint32_t flightBeginTime;            //time flight mode entered; initialized earlier
 uint32_t apogeeTime;                   //time apogee reached
 //uint32_t FCtime;                     //time handleState called (msec); initialized earlier
 //State recState;                      //state recieved from ground station if manually advanced; initialized earlier
@@ -453,10 +464,16 @@ uint16_t degToUsAirbrakes(float degrees) {
   return 1500.0 + (degrees / 60.0) * 500.0; 
 }
 
+uint16_t degToUsRollControl(float degrees) {
+  return 1500.0 + (degrees / 50.0) * 500.0;
+}
+
 float dpToDeg(float dp) {
   return (AIRBRAKES_OPEN_ANGLE - AIRBRAKES_CLOSED_ANGLE) * dp + AIRBRAKES_CLOSED_ANGLE;
 }
 
 void Update_IT_callback() {
   myTim->setCaptureCompare(1, degToUsAirbrakes(dpToDeg(myairbrakes.getDeployment())), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(3, degToUsRollControl(myrollcontrol.getAngle()), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(4, degToUsRollControl(myrollcontrol.getAngle()), MICROSEC_COMPARE_FORMAT);
 }
