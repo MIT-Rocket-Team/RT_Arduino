@@ -7,6 +7,10 @@ HardwareSerial pwrSer(PA1, PA0);
 BQ76922 bms;
 
 bmsData pkt;
+bmsCommands newCommand;
+bmsCommands currentCommand;
+
+uint8_t tmp[sizeof(newCommand)];
 
 void setup() {
   // put your setup code here, to run once:
@@ -50,6 +54,33 @@ void loop() {
   pwrSer.write((uint8_t*) &pkt, sizeof(pkt));
   pwrSer.write(calcChecksum((uint8_t*) &pkt, sizeof(pkt)));
   delay(100);
+
+  if (currentCommand.protectionsEnabled != newCommand.protectionsEnabled) {
+    if (newCommand.protectionsEnabled) {
+      bms.cellUVandSC();
+    } else {
+      bms.disableProtections();
+    }
+    currentCommand.protectionsEnabled = newCommand.protectionsEnabled;
+  }
+
+  if (currentCommand.screwSwitchEnabled != newCommand.screwSwitchEnabled) {
+    if (newCommand.screwSwitchEnabled) {
+      bms.dfetoffConfig(0x06);
+    } else {
+      bms.dfetoffConfig(0x00);
+    }
+    currentCommand.screwSwitchEnabled = newCommand.screwSwitchEnabled;
+  }
+
+  while (pwrSer.available() >= sizeof(newCommand) + 2) {
+    if (pwrSer.read() == 0xAA) {
+      pwrSer.readBytes(tmp, sizeof(newCommand));
+      if (pwrSer.read() == calcChecksum(tmp, sizeof(newCommand))) {
+        memcpy(&newCommand, tmp, sizeof(newCommand));    
+      } 
+    }
+  }
 
 }
 
