@@ -41,6 +41,10 @@ volatile uint16_t servo1us = 1500; //unused
 volatile uint16_t servo2us;
 volatile uint16_t servo3us;
 
+bool loggingEnabled = true;
+
+uint8_t telemPkt[128];
+
 HardwareSerial debugSer(PC7, PC6);
 HardwareSerial gpsSer(PB12, PB13);
 HardwareSerial CAM0_SER(PE7, PE8);
@@ -153,12 +157,11 @@ void loop() {
     updateAirbrakes();
   }
 
-  //to-do: flash logging handler
-
   if (millis() - lastTelem > 50) {
     lastTelem = millis();
     constructTelemetryPacket();
     sendTelemetryPacket();
+    handleLogging();
   }
   readTelem();
 
@@ -205,7 +208,8 @@ void handleState() {
         for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
           pwrCommand.convertersEnabled[i] = true;
         }
-        //to-do: start flash logging                                                            //Start logging data
+        allocateFlash();                                                                        //Clear some flash
+        loggingEnabled = true;                                                                  //Begin logging
       }
       break;
     case PRE_FLIGHT:                                                                          //If we are in preflight mode
@@ -267,19 +271,43 @@ void handleState() {
     case MAIN:                                                                                //If we are in main state
       if (recState == END) {                                                                    //If we recieve signal to enter into end state
         currentState = GROUND_TESTING;                                                          //Go back to ground testing mode
-        //to-do: end logging                                                                    //End logging
+        loggingEnabled = false;                                                                 //End logging
         pwrCommand.BMS.protectionsEnabled = true;                                               //Enable BMS protections/screw switch
         pwrCommand.BMS.screwSwitchEnabled = true;
       }
       break;
   }
 }
+///////////////////////////////////////////////////
+//                      Flash                    //
+///////////////////////////////////////////////////
+uint8_t flashBuf[512];
+uint8_t bufInd = 0;
+uint32_t writeIndex = 0;
+void allocateFlash() {
+  for (uint32_t eraseAdr = 0; eraseAdr < 5000000; eraseAdr += 256000) {
+    flashMem.sectorErase(eraseAdr);
+    while (flashMem.isBusy()) {
 
+    }
+  }
+}
 
+void handleLogging() {
+  if (loggingEnabled) {
+    memcpy(flashBuf + bufInd * 128, telemPkt, 128);
+    bufInd++;
+    if (bufInd == 4) {
+      flashMem.programPage(flashBuf, writeIndex);
+      writeIndex += 512;
+      bufInd = 0;
+    }
+  }
+
+}
 ///////////////////////////////////////////////////
 //                    Telemetry                  //
 ///////////////////////////////////////////////////
-uint8_t telemPkt[128];
 void constructTelemetryPacket() {
   packetNum++;
   //Pyros
