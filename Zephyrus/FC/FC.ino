@@ -64,6 +64,7 @@ uint32_t FCtime;
 
 uint32_t loopBegin;
 uint32_t lastTelem;
+uint32_t lastPowerPkt;
 
 int8_t rxrssi;
 unsigned long lastRec;
@@ -74,6 +75,8 @@ uint32_t flightBeginTime;
 
 pwrBoardData powerPkt;
 uint8_t tmp[sizeof(powerPkt)];
+
+pwrCommands pwrCommand;
 
 HardwareTimer *myTim = new HardwareTimer(TIM4);
 
@@ -132,9 +135,7 @@ void loop() {
                     accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
   updateAirbrakes();
 
-  //to-do: state machine
   //to-do: flash logging handler
-  //to-do: roll control handler
 
   if (millis() - lastTelem > 50) {
     lastTelem = millis();
@@ -142,6 +143,13 @@ void loop() {
     sendTelemetryPacket();
   }
   readTelem();
+
+  if (millis() - lastPowerPkt > 100) {
+    lastPowerPkt = millis();
+    pwrSer.write(0xAA);
+    pwrSer.write((uint8_t*) &pwrCommand, sizeof(pwrCommand));
+    pwrSer.write(calcChecksumP((uint8_t*) &pwrCommand, sizeof(pwrCommand)));
+  }
 
   while (millis() - loopBegin < 10) {}
 }
@@ -170,8 +178,12 @@ void handleState() {
         currentState = PRE_FLIGHT;                                                              //Enter into preflight mode
         mygyro.zeroRollPitchYaw();                                                              //Zero roll, pitch, yaw        
         accel.zeroIntegratedVelo();                                                             //Zero integrated velocity 
-        //to-do: zero roll control, airbrakes                                                   //Zero roll control, airbrakes
-        //to-do: disable power board protections/screw switch                                   //Disable BMS protections and screw switch functionality
+        //to-do: zero roll control, airbrakes                                                   //Zero roll control, airbrakes                              
+        pwrCommand.BMS.protectionsEnabled = false;                                              //Disable BMS protections and screw switch functionality
+        pwrCommand.BMS.screwSwitchEnabled = false;
+        for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
+          pwrCommand.convertersEnabled[i] = true;
+        }
         //to-do: start flash logging                                                            //Start logging data
       }
       break;
@@ -229,7 +241,8 @@ void handleState() {
       if (recState == END) {                                                                    //If we recieve signal to enter into end state
         currentState = GROUND_TESTING;                                                          //Go back to ground testing mode
         //to-do: end logging                                                                    //End logging
-        //to-do: enable bms protections/screw switch                                            //Enable BMS protections/screw switch
+        pwrCommand.BMS.protectionsEnabled = true;                                               //Enable BMS protections/screw switch
+        pwrCommand.BMS.screwSwitchEnabled = true;
       }
       break;
   }
@@ -337,8 +350,9 @@ void constructTelemetryPacket() {
   uint16_t cell3 = pwr.getCell3Voltage();
   uint16_t totalCurrent = pwr.getTotalCurrent();
   memcpy(&telemPkt[87], &cell1, 2);
-  memcpy(&telemPkt[87], &cell2, 2);
-  memcpy(&telemPkt[87], &cell3, 2);
+  memcpy(&telemPkt[89], &cell2, 2);
+  memcpy(&telemPkt[91], &cell3, 2);
+  memcpy(&telemPkt[93], &totalCurrent, 2);
   telemPkt[95] = pwr.getTemp() * 2.0;
   telemPkt[96] = pwr.getProtectionStatus();
   telemPkt[97] = pwr.getProtectionsEnabled();
@@ -361,6 +375,14 @@ uint8_t calcChecksum() {
   uint8_t sum = 0;
   for(int i = 0; i < 127; i++) {
     sum += telemPkt[i];
+  }
+  return sum;
+}
+
+uint8_t calcChecksumP(uint8_t* p, uint8_t len) {
+  uint8_t sum = 0;
+  for(int i = 0; i < len; i++) {
+    sum += *(p + i);
   }
   return sum;
 }
