@@ -30,16 +30,16 @@
 #define SERVO2OFFSET 0
 #define SERVO3OFFSET 0
 
-bool airbrakesEnabled;
-bool rollControlEnabled;
+volatile bool airbrakesEnabled = false;
+volatile bool rollControlEnabled = false;
 
-float airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
-float rollControlSetAngle = 0;
+volatile float airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+volatile float rollControlSetAngle = 0;
 
-uint16_t servo0us;
-uint16_t servo1us = 1500; //unused
-uint16_t servo2us;
-uint16_t servo3us;
+volatile uint16_t servo0us;
+volatile uint16_t servo1us = 1500; //unused
+volatile uint16_t servo2us;
+volatile uint16_t servo3us;
 
 HardwareSerial debugSer(PC7, PC6);
 HardwareSerial gpsSer(PB12, PB13);
@@ -146,8 +146,7 @@ void loop() {
   FCtime = millis();
   handleState();
   if (rollControlEnabled) {
-    myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
-                          accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
+    updateRollControl();
   }
   
   if (airbrakesEnabled) {
@@ -197,7 +196,10 @@ void handleState() {
         currentState = PRE_FLIGHT;                                                              //Enter into preflight mode
         mygyro.zeroRollPitchYaw();                                                              //Zero roll, pitch, yaw        
         accel.zeroIntegratedVelo();                                                             //Zero integrated velocity 
-        //to-do: zero roll control, airbrakes                                                   //Zero roll control, airbrakes                              
+        rollControlSetAngle = 0;                                                                //Zero roll control, airbrakes 
+        airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+        airbrakesEnabled = false;
+        rollControlEnabled = false;
         pwrCommand.BMS.protectionsEnabled = false;                                              //Disable BMS protections and screw switch functionality
         pwrCommand.BMS.screwSwitchEnabled = false;
         for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
@@ -212,8 +214,11 @@ void handleState() {
         currentState = FLIGHT;                                                                    //Enter into flight mode
         flightBeginTime = millis();                                                               //Mark the time we entered flight mode
         FCtime = millis();                                                                        //Update FCtime so it is never less than flightBeginTime
-        mygyro.zeroRollPitchYaw();                                                                //Zero roll, pitch, yaw
-        //to-do: begin roll control, airbrakes                                                    //Begin roll control, airbrakes
+        mygyro.zeroRollPitchYaw();                                                                //Zero roll, pitch, yaw                                                  
+        updateAirbrakes();                                                                        //Begin roll control, airbrakes
+        updateRollControl();
+        airbrakesEnabled = true;
+        rollControlEnabled = true;
         myVTX.setPower(3);                                                                        //Set VTX to 8W power
       }
       break;
@@ -235,7 +240,10 @@ void handleState() {
           pyros.arm(i);
           pyros.fire(i);
         }
-        //to-do: disable roll control, airbrakes
+        rollControlSetAngle = 0;                                                                //Zero roll control, airbrakes 
+        airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+        airbrakesEnabled = false;
+        rollControlEnabled = false;
       }
       break;
     case APOGEE:                                                                              //If we are in apogee state
@@ -504,6 +512,11 @@ void updateAirbrakes() {
   sendToAirbrakes.accel_z = accel.getAccelZ();
   sendToAirbrakes.apogeeReached = currentState > FLIGHT;
   myairbrakes.update((FCtime - flightBeginTime)/1000, sendToAirbrakes);
+}
+
+void updateRollControl() {
+  myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
+                          accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
 }
 
 uint16_t degToUsAirbrakes(float degrees) {
