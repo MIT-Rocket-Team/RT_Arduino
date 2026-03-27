@@ -1,4 +1,3 @@
-
 #include <SPI.h>
 #include <CC1200.h>
 #include <DUMMYbaro.h>
@@ -27,6 +26,24 @@
 
 #define AIRBRAKES_CLOSED_ANGLE -25
 #define AIRBRAKES_OPEN_ANGLE 25
+
+#define SERVO2OFFSET 0
+#define SERVO3OFFSET 0
+
+volatile bool airbrakesEnabled = false;
+volatile bool rollControlEnabled = false;
+
+volatile float airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+volatile float rollControlSetAngle = 0;
+
+volatile uint16_t servo0us;
+volatile uint16_t servo1us = 1500; //unused
+volatile uint16_t servo2us;
+volatile uint16_t servo3us;
+
+bool loggingEnabled = true;
+
+uint8_t telemPkt[128];
 
 HardwareSerial debugSer(PC7, PC6);
 HardwareSerial gpsSer(PB12, PB13);
@@ -61,11 +78,15 @@ State currentState = GROUND_TESTING;
 
 State recState = GROUND_TESTING;
 
-uint32_t FCtime;
+bool simEnabled;
+uint32_t simStartTime;
 uint32_t simTime;
-uint32_t simStart;
+
+uint32_t FCtime;
+
 uint32_t loopBegin;
 uint32_t lastTelem;
+uint32_t lastPowerPkt;
 
 int8_t rxrssi;
 unsigned long lastRec;
@@ -76,6 +97,8 @@ uint32_t flightBeginTime;
 
 pwrBoardData powerPkt;
 uint8_t tmp[sizeof(powerPkt)];
+
+pwrCommands pwrCommand;
 
 HardwareTimer *myTim = new HardwareTimer(TIM4);
 
@@ -90,8 +113,8 @@ void setup() {
   myTim->setMode(4, TIMER_OUTPUT_COMPARE_PWM1, PD15);
   myTim->setOverflow(20000, MICROSEC_FORMAT);
   myTim->setCaptureCompare(1, degToUsAirbrakes(AIRBRAKES_CLOSED_ANGLE), MICROSEC_COMPARE_FORMAT);
-  myTim->setCaptureCompare(3, degToUsRollControl(0), MICROSEC_COMPARE_FORMAT);
-  myTim->setCaptureCompare(4, degToUsRollControl(0), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(3, degToUsRollControl(SERVO2OFFSET), MICROSEC_COMPARE_FORMAT);
+  myTim->setCaptureCompare(4, degToUsRollControl(SERVO3OFFSET), MICROSEC_COMPARE_FORMAT);
   myTim->attachInterrupt(Update_IT_callback);
   myTim->resume();
 
@@ -121,6 +144,9 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   loopBegin = millis();
+  if (simTime < 208000 && simEnabled) {
+    simTime = millis() - simStartTime;
+  }
   barometer.updateAll(simTime);
   accel.update(currentState, simTime);
   mygyro.update(simTime);
@@ -129,24 +155,29 @@ void loop() {
   pwr.update();
 
   FCtime = millis();
-  if (simStart) {
-    simTime = FCtime - simStart;
-  }
   handleState();
-  myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
-                    accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
-  updateAirbrakes();
-
-  //to-do: state machine
-  //to-do: flash logging handler
-  //to-do: roll control handler
+  if (rollControlEnabled) {
+    updateRollControl();
+  }
+  
+  if (airbrakesEnabled) {
+    updateAirbrakes();
+  }
 
   if (millis() - lastTelem > 50) {
     lastTelem = millis();
     constructTelemetryPacket();
     sendTelemetryPacket();
+    handleLogging();
   }
   readTelem();
+
+  if (millis() - lastPowerPkt > 100) {
+    lastPowerPkt = millis();
+    pwrSer.write(0xAA);
+    pwrSer.write((uint8_t*) &pwrCommand, sizeof(pwrCommand));
+    pwrSer.write(calcChecksumP((uint8_t*) &pwrCommand, sizeof(pwrCommand)));
+  }
 
   while (millis() - loopBegin < 10) {}
 }
@@ -174,12 +205,22 @@ void handleState() {
       if (recState == PRE_FLIGHT) {                                                             //If we recieve the signal to enter preflight mode
         currentState = PRE_FLIGHT;                                                              //Enter into preflight mode
         mygyro.zeroRollPitchYaw();                                                              //Zero roll, pitch, yaw        
-        accel.zeroIntegratedVelo();                                                             //Zero integrated velocity 
-        //to-do: zero roll control, airbrakes                                                   //Zero roll control, airbrakes
-        //to-do: disable power board protections/screw switch                                   //Disable BMS protections and screw switch functionality
-        //to-do: start flash logging                                                            //Start logging data
-        simStart = millis();
-        FCtime = millis();  
+        accel.zeroIntegratedVelo();                                                             //Zero integrated velocity
+        gps.zeroAlt();                                                                          //Zero alt
+        barometer.zeroAlt();
+        rollControlSetAngle = 0;                                                                //Zero roll control, airbrakes 
+        airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+        airbrakesEnabled = false;
+        rollControlEnabled = false;
+        pwrCommand.BMS.protectionsEnabled = false;                                              //Disable BMS protections and screw switch functionality
+        pwrCommand.BMS.screwSwitchEnabled = false;
+        for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
+          pwrCommand.convertersEnabled[i] = true;
+        }
+        allocateFlash();                                                                        //Clear some flash
+        loggingEnabled = true;                                                                  //Begin logging
+        simStartTime = millis();
+        simEnabled = true;
       }
       break;
     case PRE_FLIGHT:                                                                          //If we are in preflight mode
@@ -188,9 +229,12 @@ void handleState() {
         currentState = FLIGHT;                                                                    //Enter into flight mode
         flightBeginTime = millis();                                                               //Mark the time we entered flight mode
         FCtime = millis();                                                                        //Update FCtime so it is never less than flightBeginTime
-        mygyro.zeroRollPitchYaw();                                                                //Zero roll, pitch, yaw
-        //to-do: begin roll control, airbrakes                                                    //Begin roll control, airbrakes
-        //to-do: vtx 8W                                                                           //Set VTX to 8W power
+        mygyro.zeroRollPitchYaw();                                                                //Zero roll, pitch, yaw                                                  
+        updateAirbrakes();                                                                        //Begin roll control, airbrakes
+        updateRollControl();
+        airbrakesEnabled = true;
+        rollControlEnabled = true;
+        myVTX.setPower(3);                                                                        //Set VTX to 8W power
       }
       break;
     case FLIGHT:                                                                              //If we are in flight state
@@ -211,7 +255,10 @@ void handleState() {
           pyros.arm(i);
           pyros.fire(i);
         }
-        //to-do: disable roll control, airbrakes
+        rollControlSetAngle = 0;                                                                //Zero roll control, airbrakes 
+        airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+        airbrakesEnabled = false;
+        rollControlEnabled = false;
       }
       break;
     case APOGEE:                                                                              //If we are in apogee state
@@ -235,18 +282,43 @@ void handleState() {
     case MAIN:                                                                                //If we are in main state
       if (recState == END) {                                                                    //If we recieve signal to enter into end state
         currentState = GROUND_TESTING;                                                          //Go back to ground testing mode
-        //to-do: end logging                                                                    //End logging
-        //to-do: enable bms protections/screw switch                                            //Enable BMS protections/screw switch
+        loggingEnabled = false;                                                                 //End logging
+        pwrCommand.BMS.protectionsEnabled = true;                                               //Enable BMS protections/screw switch
+        pwrCommand.BMS.screwSwitchEnabled = true;
       }
       break;
   }
 }
+///////////////////////////////////////////////////
+//                      Flash                    //
+///////////////////////////////////////////////////
+uint8_t flashBuf[512];
+uint8_t bufInd = 0;
+uint32_t writeIndex = 0;
+void allocateFlash() {
+  for (uint32_t eraseAdr = 0; eraseAdr < 5000000; eraseAdr += 256000) {
+    flashMem.sectorErase(eraseAdr);
+    while (flashMem.isBusy()) {
 
+    }
+  }
+}
 
+void handleLogging() {
+  if (loggingEnabled) {
+    memcpy(flashBuf + bufInd * 128, telemPkt, 128);
+    bufInd++;
+    if (bufInd == 4) {
+      flashMem.programPage(flashBuf, writeIndex);
+      writeIndex += 512;
+      bufInd = 0;
+    }
+  }
+
+}
 ///////////////////////////////////////////////////
 //                    Telemetry                  //
 ///////////////////////////////////////////////////
-uint8_t telemPkt[128];
 void constructTelemetryPacket() {
   packetNum++;
   //Pyros
@@ -270,7 +342,12 @@ void constructTelemetryPacket() {
   }
 
   //Servos
-  //to-do
+  telemPkt[10] = servo0us & 0xFF;
+  telemPkt[11] = (servo0us >> 8) | ((servo1us & 0x0F) << 4);
+  telemPkt[12] = (servo1us >> 4) & 0xFF;
+  telemPkt[13] = servo2us & 0xFF;
+  telemPkt[14] = (servo2us >> 8) | ((servo3us & 0x0F) << 4);
+  telemPkt[15] = (servo3us >> 4) & 0xFF;
 
   //Accel
   int32_t accelRawX = accel.getRawX();
@@ -344,8 +421,9 @@ void constructTelemetryPacket() {
   uint16_t cell3 = pwr.getCell3Voltage();
   uint16_t totalCurrent = pwr.getTotalCurrent();
   memcpy(&telemPkt[87], &cell1, 2);
-  memcpy(&telemPkt[87], &cell2, 2);
-  memcpy(&telemPkt[87], &cell3, 2);
+  memcpy(&telemPkt[89], &cell2, 2);
+  memcpy(&telemPkt[91], &cell3, 2);
+  memcpy(&telemPkt[93], &totalCurrent, 2);
   telemPkt[95] = pwr.getTemp() * 2.0;
   telemPkt[96] = pwr.getProtectionStatus();
   telemPkt[97] = pwr.getProtectionsEnabled();
@@ -368,6 +446,14 @@ uint8_t calcChecksum() {
   uint8_t sum = 0;
   for(int i = 0; i < 127; i++) {
     sum += telemPkt[i];
+  }
+  return sum;
+}
+
+uint8_t calcChecksumP(uint8_t* p, uint8_t len) {
+  uint8_t sum = 0;
+  for(int i = 0; i < len; i++) {
+    sum += *(p + i);
   }
   return sum;
 }
@@ -403,12 +489,22 @@ void readTelem() {
                 recValid = false;
               }
             }
-            if (recValid && currentState == GROUND_TESTING) {
+            if (recValid) {
               for(uint8_t i = 0; i < 8; i++) {
                 if ((recBuf[12] >> i) & 0b1) {
                   pyros.arm(i);
                 }
               }
+            }
+            break;
+          case 0x02:
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid) {
+              recState = static_cast<State>(recBuf[12]);
             }
             break;
           case 0x06:
@@ -417,7 +513,7 @@ void readTelem() {
                 recValid = false;
               }
             }
-            if (recValid && currentState == GROUND_TESTING) {
+            if (recValid) {
               for(uint8_t i = 0; i < 8; i++) {
                 if ((recBuf[12] >> i) & 0b1) {
                   pyros.fire(i);
@@ -432,10 +528,163 @@ void readTelem() {
               }
             }
             if (recValid && currentState == GROUND_TESTING) {
-              float angle = *((float*) &recBuf[9]);
-              myTim->setCaptureCompare(1, degToUsAirbrakes(angle), MICROSEC_COMPARE_FORMAT);
+              airbrakesSetAngle = *((float*) &recBuf[9]);
+              airbrakesEnabled = false;
             }
             break;
+          case 0x05:
+            for (uint8_t i = 1; i < 9; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              rollControlSetAngle = *((float*) &recBuf[9]);
+              rollControlEnabled = false;
+            }
+            break;
+          case 0x04:
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              updateRollControl();
+              rollControlEnabled = true;
+            }
+            break;
+          case 0x08:
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
+              rollControlSetAngle = 0;
+              airbrakesEnabled = false;
+              rollControlEnabled = false;
+            }
+            break;
+          case 0x09:
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+                mygyro.zeroRollPitchYaw();
+            }
+            break;
+          case 0x0A:
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+                barometer.zeroAlt();
+                gps.zeroAlt();
+            }
+            break;
+          case 0x0B:
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              accel.zeroIntegratedVelo();
+            }
+            break;
+          case 0x10: //EMERGENCY PISTON
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid) {
+              for (uint8_t i = 0; i < 2; i++) {                                                       //Fire Pyros 0, 1
+                pyros.arm(i);
+                pyros.fire(i);
+              }
+            }
+            break;
+          case 0x11: //EMERGENCY BP
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid) {
+              for (uint8_t i = 3; i < 5; i++) {                                                         //Fire Pyros 3, 4
+                pyros.arm(i);
+                pyros.fire(i);
+              }
+            }
+            break;
+          case 0x12: //EMERGENCY TD
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid) {
+              pyros.arm(2);
+              pyros.fire(2);
+            }
+            break;
+          case 0x13: //EMERGENCY ALL
+            for (uint8_t i = 1; i < 13; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid) {
+              for (uint8_t i = 0; i < 5; i++) {                                                       //Fire Pyros 0, 1
+                pyros.arm(i);
+                pyros.fire(i);
+              }
+            }
+            break;
+          case 0x14: //VTX PWR
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              if (recBuf[12] > 3) {
+                recBuf[12] = 3;
+              }
+              myVTX.setPower(recBuf[12]);
+            }
+            break;
+          case 0x15: //Converters
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              for (uint8_t i = 0; i < 6; i++) {
+                pwrCommand.convertersEnabled[i] = (recBuf[12] >> i) & 0x01;
+              }
+            }
+            break;
+          case 0x16: //BMS PROTECTIONS
+            for (uint8_t i = 1; i < 12; i++) {
+              if (recBuf[i] != 0x00) {
+                recValid = false;
+              }
+            }
+            if (recValid && currentState == GROUND_TESTING) {
+              pwrCommand.BMS.protectionsEnabled = recBuf[12];
+              pwrCommand.BMS.screwSwitchEnabled = recBuf[12];
+            }
+            break;
+          
         }
       } else {
         badPackets++;
@@ -467,6 +716,11 @@ void updateAirbrakes() {
   myairbrakes.update((FCtime - flightBeginTime)/1000, sendToAirbrakes);
 }
 
+void updateRollControl() {
+  myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
+                          accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
+}
+
 uint16_t degToUsAirbrakes(float degrees) {
   return 1500.0 + (degrees / 60.0) * 500.0; 
 }
@@ -480,7 +734,22 @@ float dpToDeg(float dp) {
 }
 
 void Update_IT_callback() {
-  myTim->setCaptureCompare(1, degToUsAirbrakes(dpToDeg(myairbrakes.getDeployment())), MICROSEC_COMPARE_FORMAT);
-  myTim->setCaptureCompare(3, degToUsRollControl(myrollcontrol.getAngle()), MICROSEC_COMPARE_FORMAT);
-  myTim->setCaptureCompare(4, degToUsRollControl(myrollcontrol.getAngle()), MICROSEC_COMPARE_FORMAT);
+  if (airbrakesEnabled) {
+    myTim->setCaptureCompare(1, degToUsAirbrakes(dpToDeg(myairbrakes.getDeployment())), MICROSEC_COMPARE_FORMAT);
+    servo0us = degToUsAirbrakes(dpToDeg(myairbrakes.getDeployment()));
+  } else {
+    myTim->setCaptureCompare(1, degToUsAirbrakes(airbrakesSetAngle), MICROSEC_COMPARE_FORMAT);
+    servo0us = degToUsAirbrakes(airbrakesSetAngle);
+  }
+  if (rollControlEnabled) {
+    myTim->setCaptureCompare(3, degToUsRollControl(myrollcontrol.getAngle() + SERVO2OFFSET), MICROSEC_COMPARE_FORMAT);
+    myTim->setCaptureCompare(4, degToUsRollControl(myrollcontrol.getAngle() + SERVO3OFFSET), MICROSEC_COMPARE_FORMAT);
+    servo2us = degToUsRollControl(myrollcontrol.getAngle() + SERVO2OFFSET);
+    servo3us = degToUsRollControl(myrollcontrol.getAngle() + SERVO3OFFSET);
+  } else {
+    myTim->setCaptureCompare(3, degToUsRollControl(rollControlSetAngle + SERVO2OFFSET), MICROSEC_COMPARE_FORMAT);
+    myTim->setCaptureCompare(4, degToUsRollControl(rollControlSetAngle + SERVO3OFFSET), MICROSEC_COMPARE_FORMAT);
+    servo2us = degToUsRollControl(rollControlSetAngle + SERVO2OFFSET);
+    servo3us = degToUsRollControl(rollControlSetAngle + SERVO3OFFSET);
+  }
 }
