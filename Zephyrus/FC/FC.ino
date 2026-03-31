@@ -197,7 +197,11 @@ void handleState() {
     case GROUND_TESTING:                                                                      //If we are in ground testing mode
       if (recState == PRE_FLIGHT) {                                                             //If we recieve the signal to enter preflight mode
         currentState = PRE_FLIGHT;                                                              //Enter into preflight mode
-        mygyro.zeroRollPitchYaw();                                                              //Zero roll, pitch, yaw        
+        allocateFlash();                                                                        //Clear some flash
+        loggingEnabled = true;                                                                  //Begin logging
+        mygyro.update();                                                                        //Prevent large dt on first update post zero
+        mygyro.zeroRollPitchYaw();                                                              //Zero roll, pitch, yaw
+        accel.update(currentState);                                                             //Prevent large dt on first update post zero        
         accel.zeroIntegratedVelo();                                                             //Zero integrated velocity
         gps.zeroAlt();                                                                          //Zero alt
         barometer.zeroAlt();
@@ -210,8 +214,6 @@ void handleState() {
         for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
           pwrCommand.convertersEnabled[i] = true;
         }
-        allocateFlash();                                                                        //Clear some flash
-        loggingEnabled = true;                                                                  //Begin logging
       }
       break;
     case PRE_FLIGHT:                                                                          //If we are in preflight mode
