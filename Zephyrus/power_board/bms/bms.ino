@@ -2,6 +2,8 @@
 #include "Wire.h"
 #include "myTypes.h"
 
+#define SEND_INTERVAL 500 //ms
+
 HardwareSerial pwrSer(PA1, PA0);
 
 BQ76922 bms;
@@ -50,27 +52,34 @@ void loop() {
   pkt.protectionStatus = bms.safetyStatusA();
   pkt.protectionsEnabled = bms.enabledProtectionsA();
 
-  pwrSer.write(0xAA);
-  pwrSer.write((uint8_t*) &pkt, sizeof(pkt));
-  pwrSer.write(calcChecksum((uint8_t*) &pkt, sizeof(pkt)));
-  delay(100);
+  if (millis() - lastSent > SEND_INTERVAL) {
+    lastSent = millis();
+    pwrSer.write(0xAA);
+    pwrSer.write((uint8_t*) &pkt, sizeof(pkt));
+    pwrSer.write(calcChecksum((uint8_t*) &pkt, sizeof(pkt)));
+  }
 
+  
   if (currentCommand.protectionsEnabled != newCommand.protectionsEnabled) {
+    bms.enterConfigMode();
     if (newCommand.protectionsEnabled) {
       bms.cellUVandSC();
     } else {
       bms.disableProtections();
     }
     currentCommand.protectionsEnabled = newCommand.protectionsEnabled;
+    bms.exitConfigMode();
   }
 
   if (currentCommand.screwSwitchEnabled != newCommand.screwSwitchEnabled) {
+    bms.enterConfigMode();
     if (newCommand.screwSwitchEnabled) {
       bms.dfetoffConfig(0x06);
     } else {
       bms.dfetoffConfig(0x00);
     }
     currentCommand.screwSwitchEnabled = newCommand.screwSwitchEnabled;
+    bms.exitConfigMode();
   }
 
   while (pwrSer.available() >= sizeof(newCommand) + 2) {
