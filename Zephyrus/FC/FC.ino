@@ -27,8 +27,8 @@
 #define AIRBRAKES_CLOSED_ANGLE -25
 #define AIRBRAKES_OPEN_ANGLE 25
 
-#define SERVO2OFFSET 0
-#define SERVO3OFFSET 0
+#define SERVO2OFFSET -0.5f
+#define SERVO3OFFSET -15.0f
 
 volatile bool airbrakesEnabled = false;
 volatile bool rollControlEnabled = false;

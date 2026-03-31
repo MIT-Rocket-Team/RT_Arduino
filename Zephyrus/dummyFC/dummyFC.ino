@@ -27,8 +27,8 @@
 #define AIRBRAKES_CLOSED_ANGLE -25
 #define AIRBRAKES_OPEN_ANGLE 25
 
-#define SERVO2OFFSET 0
-#define SERVO3OFFSET 0
+#define SERVO2OFFSET -0.5f
+#define SERVO3OFFSET -15.0f
 
 volatile bool airbrakesEnabled = false;
 volatile bool rollControlEnabled = false;
@@ -251,10 +251,12 @@ void handleState() {
       if (currentState == APOGEE) {                                                           //If we are advancing to apogee
         apogeeTime = millis();                                                                  //Mark time we entered apogee
         FCtime = millis();                                                                      //Update FCtime so it is never less than apogeeTime
-        for (uint8_t i = 0; i < 2; i++) {                                                       //Fire Pyros 0, 1
+        for (uint8_t i = 0; i < 1; i++) {                                                       //Fire Pyros 0, 1
           pyros.arm(i);
           pyros.fire(i);
         }
+        pyros.arm(5);
+        pyros.fire(5);
         rollControlSetAngle = 0;                                                                //Zero roll control, airbrakes 
         airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
         airbrakesEnabled = false;
@@ -605,10 +607,12 @@ void readTelem() {
               }
             }
             if (recValid) {
-              for (uint8_t i = 0; i < 2; i++) {                                                       //Fire Pyros 0, 1
+              for (uint8_t i = 0; i < 1; i++) {                                                       //Fire Pyros 0, 1
                 pyros.arm(i);
                 pyros.fire(i);
               }
+              pyros.arm(5);
+              pyros.fire(5);
             }
             break;
           case 0x11: //EMERGENCY BP
