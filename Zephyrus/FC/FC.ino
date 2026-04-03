@@ -209,8 +209,8 @@ void handleState() {
         airbrakesSetAngle = AIRBRAKES_CLOSED_ANGLE;
         airbrakesEnabled = false;
         rollControlEnabled = false;
-        pwrCommand.BMS.protectionsEnabled = false;                                              //Disable BMS protections and screw switch functionality
-        pwrCommand.BMS.screwSwitchEnabled = false;
+        //pwrCommand.BMS.protectionsEnabled = false;                                              //Disable BMS protections and screw switch functionality
+        //pwrCommand.BMS.screwSwitchEnabled = false;
         for (uint8_t i = 0; i < 6; i++) {                                                       //Enable all converters
           pwrCommand.convertersEnabled[i] = true;
         }
@@ -276,8 +276,8 @@ void handleState() {
       if (recState == END) {                                                                    //If we recieve signal to enter into end state
         currentState = GROUND_TESTING;                                                          //Go back to ground testing mode
         loggingEnabled = false;                                                                 //End logging
-        pwrCommand.BMS.protectionsEnabled = true;                                               //Enable BMS protections/screw switch
-        pwrCommand.BMS.screwSwitchEnabled = true;
+        //pwrCommand.BMS.protectionsEnabled = true;                                               //Enable BMS protections/screw switch
+        //pwrCommand.BMS.screwSwitchEnabled = true;
       }
       break;
   }
@@ -661,8 +661,12 @@ void readTelem() {
               }
             }
             if (recValid && currentState == GROUND_TESTING) {
+              debugSer.println(recBuf[12], BIN);
               for (uint8_t i = 0; i < 6; i++) {
                 pwrCommand.convertersEnabled[i] = (recBuf[12] >> i) & 0x01;
+                /*if ((recBuf[12]>>i) & 0x01) {
+                  debugSer.println(i);
+                }*/
               }
             }
             break;

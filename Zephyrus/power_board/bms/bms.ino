@@ -5,6 +5,7 @@
 #define SEND_INTERVAL 500 //ms
 
 HardwareSerial pwrSer(PA1, PA0);
+HardwareSerial debugSer(PA3, PA2);
 
 BQ76922 bms;
 
@@ -14,21 +15,20 @@ bmsCommands currentCommand;
 
 uint8_t tmp[sizeof(newCommand)];
 
+uint32_t lastSent;
+
 void setup() {
   // put your setup code here, to run once:
   pwrSer.begin(9600);
-  Serial.setTx(PA2);
-  Serial.setRx(PA3);
-  Serial.begin(115200);
-  Serial.println("BOOT");
+  debugSer.begin(115200);
+  debugSer.println("BOOT");
   Wire.setSCL(PA7);
   Wire.setSDA(PA6);
   bms.begin();
   delay(100);
-  Serial.println("BMS BEGIN");
+  debugSer.println("BMS BEGIN");
   int16_t dummy = bms.cellVoltage(0); //Chip locks up without a read first
   bms.enterConfigMode();
-  Serial.println("ENTER CONFIG");
   bms.cellConfig(3);
   bms.minCellVoltage(3.3);
   bms.dfetoffConfig(0x06);
@@ -49,7 +49,7 @@ void loop() {
   pkt.current = bms.current();
   pkt.temp = bms.temp();
   pkt.fetStatus = bms.fetStatus();
-  pkt.protectionStatus = bms.safetyStatusA();
+  pkt.protectionStatus |= bms.safetyStatusA();
   pkt.protectionsEnabled = bms.enabledProtectionsA();
 
   if (millis() - lastSent > SEND_INTERVAL) {
@@ -58,8 +58,8 @@ void loop() {
     pwrSer.write((uint8_t*) &pkt, sizeof(pkt));
     pwrSer.write(calcChecksum((uint8_t*) &pkt, sizeof(pkt)));
   }
-
-  
+  //ENTERING CONFIG MODE POWERS OFF OUTPUTS
+  /*
   if (currentCommand.protectionsEnabled != newCommand.protectionsEnabled) {
     bms.enterConfigMode();
     if (newCommand.protectionsEnabled) {
@@ -81,6 +81,7 @@ void loop() {
     currentCommand.screwSwitchEnabled = newCommand.screwSwitchEnabled;
     bms.exitConfigMode();
   }
+  */
 
   while (pwrSer.available() >= sizeof(newCommand) + 2) {
     if (pwrSer.read() == 0xAA) {

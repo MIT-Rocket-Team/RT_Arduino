@@ -31,7 +31,7 @@ pwrBoardData powerPkt;
 pwrCommands command;
 uint8_t tmpCommand[sizeof(command)];
 
-uint8_t tmp[15];
+uint8_t tmp[sizeof(bmsData)];
 
 int16_t enables[] = {EN0, EN1, EN2};
 
@@ -56,11 +56,11 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  while (bmsSer.available() >= 17) {
+  while (bmsSer.available() >= sizeof(bmsData) + 2) {
     if (bmsSer.read() == 0xAA) {
-      bmsSer.readBytes(tmp, 15);
-      if (bmsSer.read() == calcChecksum(tmp, 15)) {
-        memcpy(&powerPkt.BMS, tmp, 15);    
+      bmsSer.readBytes(tmp, sizeof(bmsData));
+      if (bmsSer.read() == calcChecksum(tmp, sizeof(bmsData))) {
+        memcpy(&powerPkt.BMS, tmp, sizeof(bmsData));
       } 
     }
   }
@@ -83,6 +83,9 @@ void loop() {
       } 
     }
   }
+
+  //debugSer.println(powerPkt.BMS.cell1);
+  //debugSer.println(powerPkt.BMS.protectionsEnabled, BIN);
 
   if (command.convertersEnabled[0]) {
     digitalWrite(EN2, 1);
