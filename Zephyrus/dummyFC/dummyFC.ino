@@ -24,8 +24,8 @@
 #define BARO_CS  PD3
 #define CC_CS PC12
 
-#define AIRBRAKES_CLOSED_ANGLE -25
-#define AIRBRAKES_OPEN_ANGLE 25
+#define AIRBRAKES_CLOSED_ANGLE -67.0f
+#define AIRBRAKES_OPEN_ANGLE -117.0f
 
 #define SERVO2OFFSET -0.5f
 #define SERVO3OFFSET -15.0f
@@ -371,7 +371,7 @@ void constructTelemetryPacket() {
   uint8_t gpsFix = gps.getFixType();
   int32_t lat = gps.getLat();
   int32_t lon = gps.getLon();
-  uint32_t alt = gps.getHeight();
+  float alt = gps.getHeight();
   uint32_t hACC = gps.getHAcc();
   uint32_t vACC = gps.getVAcc();
   uint8_t numSat = gps.getNumSV();
