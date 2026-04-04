@@ -42,9 +42,6 @@ unsigned long newStepsEl = 0;
 unsigned long pastTAz = 0;
 unsigned long pastTEl = 0;
 
-int last_dir_az = 0;
-int last_dir_el = 0;
-
 void setup() {
   Serial.begin(115200);
   SPI_3.begin();
@@ -103,37 +100,19 @@ void loop() {
 
 
       Serial.println(elevation_target);      
-      azimuth_target_steps = round(azimuth_target * (1.0/1.8) * 50.0 * 4.0);
-      elevation_target_steps = round(elevation_target * (1.0/1.8) * 50.0 * 4.0);
+      azimuth_target_steps = round(azimuth_target * (1/1.8) * 50.0 * 4.0);
+      elevation_target_steps = round(elevation_target * (1/1.8) * 50.0 * 4.0);
       shortest_path();
 
       if (abs(p_azimuth_target - azimuth_target) >= 1) {
-        int dir = (azimuth_target_steps > azimuth_steps) ? 1 : -1;
-
-        bool direction_changed = (dir != last_dir_az);
-        bool az_stopped = (micros() - last_step_azimuth) > 3 * az_interval;
-
-        if (az_stopped || direction_changed) {
-          newStepsAz = 0;
-          pastTAz = 0;
-        }
-
-        last_dir_az = dir;
+        newStepsAz = 0;
+        pastTAz = 0;
         az_adjust();
       }
 
       if (abs(p_elevation_target - elevation_target) >= 1) {
-        int dir = (elevation_target_steps > elevation_steps) ? 1 : -1;
-
-        bool direction_changed = (dir != last_dir_el);
-        bool el_stopped = (micros() - last_step_elevation) > 3 * el_interval;
-
-        if (el_stopped || direction_changed) {
-          newStepsEl = 0;
-          pastTEl = 0;
-        }
-
-        last_dir_el = dir;
+        newStepsEl = 0;
+        pastTEl = 0;
         el_adjust();
       }
 
