@@ -13,7 +13,7 @@ SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
 CC1200 cc(&SPI_3, settings, CS);
 
 HardwareSerial gpsSer(PB12, PB13);
-
+HardwareSerial debugSer(PC7, PC6);
 byte recBuf[128];
 byte txBuf[16];
 
@@ -24,25 +24,37 @@ GPS gps(&gpsSer);
 
 void setup() {
   // put your setup code here, to run once:
+  pinMode(PA0, OUTPUT);
+  pinMode(PA1, OUTPUT);
   delay(1000);
   gps.begin();
   Serial.begin(115200);
-  //Serial.println("BOOT");
+  debugSer.begin(115200);
+  debugSer.println("BOOT");
   cc.begin();
+  debugSer.println(cc.partnum());
+  debugSer.println(cc.status());
+  if(cc.status() != 7) {
+    digitalWrite(PA0, 1);
+  }
   cc.simpleConfig();
   cc.Rx(128);
 }
   
 void loop() {
   gps.update();
+  while(cc.avail() < 128 && cc.status() != 6) {
+    uint8_t avail = cc.avail();
+    delay(5);
+    if (cc.avail() == avail) {
+      cc.flushRx();
+      cc.Rx(128);
+    }
+  }
   if(cc.status() == 6) {
     cc.flushRx();
     cc.Rx(128);
   }
-
-  //Serial.println(cc.status());
-  //Serial.println(cc.avail());
-  //Serial.println();
 
   if(cc.avail() == 128) {
     Serial.write(0xAB);
@@ -57,6 +69,9 @@ void loop() {
     Serial.write((uint8_t*) &lat, 4);
     Serial.write((uint8_t*) &lon, 4);
     Serial.write((uint8_t*) &alt, 4);
+    digitalWrite(PA1, 1);
+    delay(20);
+    digitalWrite(PA1, 0);
     cc.Rx(128);   
   }
 }
