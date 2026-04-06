@@ -269,6 +269,7 @@ void handleState() {
           currentState = MAIN;                                                                    //Advance to main state
           pyros.arm(2);                                                                           //Fire Pyro 2
           pyros.fire(2);                                                                        
+          disableRollControlServos();                                                             //Remove power and signal from roll control servos to prevent damage upon landing
         }
       }
       break;
@@ -716,6 +717,12 @@ void updateAirbrakes() {
 void updateRollControl() {
   myrollcontrol.update((FCtime - flightBeginTime) / 1000.0, barometer.getFilteredAltitude(), 
                           accel.getIntegratedVelo(), mygyro.getRoll(), mygyro.getRollRate());
+}
+
+void disableRollControlServos() {
+  myTim->setMode(3, TIMER_OUTPUT_COMPARE_FORCED_INACTIVE, PD14);
+  myTim->setMode(4, TIMER_OUTPUT_COMPARE_FORCED_INACTIVE, PD15);
+  pwrCommand.convertersEnabled[4] = false;
 }
 
 uint16_t degToUsAirbrakes(float degrees) {
