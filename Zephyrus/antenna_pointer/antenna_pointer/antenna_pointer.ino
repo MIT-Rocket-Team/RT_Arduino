@@ -27,7 +27,7 @@ SPISettings settings(1000000, MSBFIRST, SPI_MODE1);
 DRV8452 drv_azimuth(&SPI_3, settings, CS_AZ, SLP_AZ, EN_AZ);
 DRV8452 drv_elevation(&SPI_3, settings, CS_EL, SLP_EL, EN_EL);
 
-// Previous commanded targets, used to detect when the host sends a new move.
+// Previous commanded targets, used to detect when a new move is requested.
 float p_azimuth_target;
 float p_elevation_target;
 
@@ -47,7 +47,7 @@ int azimuth_target_steps;
 int elevation_steps;
 int azimuth_steps;
 
-// Currently unused, but left here as a convenient motion-tuning parameter.
+// Currently unused.
 float error_tolerance = 0.05;
 
 // Timestamp of the most recent step pulse on each axis.
@@ -66,6 +66,14 @@ unsigned long newStepsEl = 0;
 // Absolute elapsed time along the acceleration curve at the previous step.
 unsigned long pastTAz = 0;
 unsigned long pastTEl = 0;
+
+// Persistent copies of the current time point on each acceleration ramp.
+unsigned long newTAz = 0;
+unsigned long newTEl = 0;
+
+// Track the direction of the current move so a reversal can restart the ramp.
+int last_az_direction = 0;
+int last_el_direction = 0;
 
 void setup() {
   // Serial link to the host computer / radio controller.
@@ -110,8 +118,7 @@ void loop() {
         checksum += data[i];
       }
       if(checksum == data[10]){
-        // Save the last commanded targets so we can tell whether a new move
-        // was requested and decide whether to restart an acceleration ramp.
+        // Save the last commanded targets so target changes can be detected.
         p_azimuth_target = azimuth_target;
         p_elevation_target = elevation_target;
         switch (data[1]){
@@ -155,10 +162,10 @@ void loop() {
         }
       }
 
-      // Basic debug output. This currently prints elevation only.
+      // Debug output.
       Serial.println(elevation_target);      
 
-      // Convert target angles into full-step counts.
+      // Convert target angles into motor step counts.
       // 1 / 1.8 converts degrees to motor full steps per revolution.
       // 50.0 is the gearbox / drive ratio.
       // 4.0 reflects the quarter-degree scaling used elsewhere in this ramp math.
@@ -170,31 +177,45 @@ void loop() {
       shortest_path();
 
       if (abs(p_azimuth_target - azimuth_target) >= 1) {
-        // If a new azimuth command arrives while the motor is already stepping,
-        // keep the existing ramp state so the timing curve is not restarted.
-        // If the axis is idle, start a fresh acceleration profile.
-        bool az_is_moving = (newStepsAz > 0) && ((micros() - last_step_azimuth) < az_interval);
-        if (!az_is_moving) {
+        int az_direction = 0;
+        if (azimuth_target_steps > azimuth_steps) {
+          az_direction = 1;
+        } else if (azimuth_target_steps < azimuth_steps) {
+          az_direction = -1;
+        }
+
+        // Keep the current ramp when extending a move in the same direction.
+        // Restart only if the axis is idle or the command reverses direction.
+        bool az_is_idle = (azimuth_steps == azimuth_target_steps);
+        bool az_reversing = (az_direction != 0) && (last_az_direction != 0) && (az_direction != last_az_direction);
+        if (az_is_idle || az_reversing) {
           newStepsAz = 0;
           pastTAz = 0;
+          newTAz = 0;
           az_adjust();
         }
+        last_az_direction = az_direction;
       }
 
       if (abs(p_elevation_target - elevation_target) >= 1) {
-        // Same logic for elevation: preserve the ramp if motion is in progress,
-        // otherwise initialize a new one from rest.
-        bool el_is_moving = (newStepsEl > 0) && ((micros() - last_step_elevation) < el_interval);
-        if (!el_is_moving) {
+        int el_direction = 0;
+        if (elevation_target_steps > elevation_steps) {
+          el_direction = 1;
+        } else if (elevation_target_steps < elevation_steps) {
+          el_direction = -1;
+        }
+
+        // Apply the same rule to elevation.
+        bool el_is_idle = (elevation_steps == elevation_target_steps);
+        bool el_reversing = (el_direction != 0) && (last_el_direction != 0) && (el_direction != last_el_direction);
+        if (el_is_idle || el_reversing) {
           newStepsEl = 0;
           pastTEl = 0;
+          newTEl = 0;
           el_adjust();
         }
+        last_el_direction = el_direction;
       }
-
-      
-      
-      
     } else {
       // Discard bytes until we realign to the next packet header.
       Serial.read();
@@ -208,17 +229,18 @@ void loop() {
       drv_azimuth.fullStep(true);
       azimuth_steps ++;
       newStepsAz ++;
+      last_az_direction = 1;
 
-      // Record when this step occurred so the next interval can be timed.
+      // Record when this step occurred.
       last_step_azimuth = micros();
 
-      // Keep tightening the interval while accelerating, but stop once the
-      // interval gets very small to avoid overdriving the motor.
+      // Update the interval while accelerating, but stop once it gets small.
       if (az_interval > 1000) { az_adjust(); };
     } else if(azimuth_steps > azimuth_target_steps){
       drv_azimuth.fullStep(false);
       azimuth_steps --;
       newStepsAz ++;
+      last_az_direction = -1;
       last_step_azimuth = micros();
       if (az_interval > 1000) { az_adjust(); };
     }
@@ -230,12 +252,14 @@ void loop() {
       drv_elevation.fullStep(true);
       elevation_steps ++;
       newStepsEl ++;
+      last_el_direction = 1;
       last_step_elevation = micros();
       if (el_interval > 1000) { el_adjust(); };
     } else if(elevation_steps > elevation_target_steps){
       drv_elevation.fullStep(false);
       elevation_steps --;
       newStepsEl ++;
+      last_el_direction = -1;
       last_step_elevation = micros();
       if (el_interval > 1000) { el_adjust(); };
     }
@@ -265,17 +289,25 @@ So t = sqrt(2 * max deg / 1255)
 */
 
 void az_adjust() {
-  // Compute the total elapsed time needed to reach the next step number
-  // on a constant-acceleration profile, then subtract the previous total
-  // to get the interval for just the next step.
-  unsigned long newT = sqrt((2.0 * ((newStepsAz + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
-  az_interval = newT - pastTAz;
-  pastTAz = newT;
+  // Compute the total elapsed time to reach the next step on the
+  // acceleration curve, then subtract the previous total to get the
+  // interval for just the next step.
+  if (newStepsAz == 0) {
+    newTAz = 0;
+  }
+
+  newTAz = sqrt((2.0 * ((newStepsAz + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
+  az_interval = newTAz - pastTAz;
+  pastTAz = newTAz;
 }
 
 void el_adjust() {
   // Same acceleration-ramp calculation for elevation.
-  unsigned long newT = sqrt((2.0 * ((newStepsEl + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
-  el_interval = newT - pastTEl;
-  pastTEl = newT;
+  if (newStepsEl == 0) {
+    newTEl = 0;
+  }
+
+  newTEl = sqrt((2.0 * ((newStepsEl + 1)/ 4.0) / (1255.0 / 1.5))) * 1000000.0;
+  el_interval = newTEl - pastTEl;
+  pastTEl = newTEl;
 }
