@@ -41,7 +41,7 @@ volatile uint16_t servo1us = 1500; //unused
 volatile uint16_t servo2us;
 volatile uint16_t servo3us;
 
-bool loggingEnabled = true;
+bool loggingEnabled = false;
 
 uint8_t telemPkt[128];
 
