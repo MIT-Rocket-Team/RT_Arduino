@@ -21,12 +21,14 @@ void setup() {
   bms.enableFet();
   bms.chargePumpEnable();
   bms.exitConfigMode();
+
+  pwrSer.begin(9600);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   pwrSer.println("TEST BMS -> PWR");
-  while (BMS_Serial.available()) {
+  while (pwrSer.available()) {
     debugSer.write(pwrSer.read());
   }
   delay(1000);
