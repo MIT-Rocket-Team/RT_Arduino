@@ -169,6 +169,11 @@ void loop() {
   pyros.update(currentState);
   pwr.update();
 
+  //TODO
+  //imu.update(currentState);
+  //vib.update();
+  //handleLogging();
+
   FCtime = millis();
   handleState();
   if (rollControlEnabled) {

@@ -34,11 +34,11 @@ uint8_t tmpCommand[sizeof(command)];
 
 uint8_t tmp[sizeof(bmsData)];
 
-int16_t enables[] = {EN0, EN1, EN2};
+int16_t enables[] = {EN2, EN1, EN3, EN4, EN0}; //3V, 5V, 8.4V Digital VTX, 8.4V Servo, 28V
 
 void setup() {
   // put your setup code here, to run once:
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 5; i++) {
     pinMode(enables[i], OUTPUT);
     digitalWrite(enables[i], 1);
   }
@@ -88,32 +88,12 @@ void loop() {
   //debugSer.println(powerPkt.BMS.cell1);
   //debugSer.println(powerPkt.BMS.protectionsEnabled, BIN);
 
-  if (command.convertersEnabled[0]) {
-    digitalWrite(EN2, 1);
-  } else {
-    digitalWrite(EN2, 0);
-  }
-  if (command.convertersEnabled[2]) {
-    digitalWrite(EN1, 1);
-  } else {
-    digitalWrite(EN1, 0);
-  }
-  if (command.convertersEnabled[3]) {
-    pinMode(EN3, INPUT); //EN has pullup on converter
-  } else {
-    pinMode(EN3, OUTPUT);
-    digitalWrite(EN3, 0);
-  }
-  if (command.convertersEnabled[4]) {
-    pinMode(EN4, INPUT); //EN has pullup on converter
-  } else {
-    pinMode(EN4, OUTPUT);
-    digitalWrite(EN4, 0);
-  }
-  if (command.convertersEnabled[5]) {
-    digitalWrite(EN0, 1);
-  } else {
-    digitalWrite(EN0, 0);
+  for (uint8_t i = 0; i < 6; i++) {
+    if (command.convertersEnabled[i]) {
+      digitalWrite(enables[i], 1);
+    } else {
+      digitalWrite(enables[i], 0);
+    }
   }
 
   bmsSer.write(0xAA);
