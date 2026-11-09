@@ -88,7 +88,7 @@ void loop() {
   //debugSer.println(powerPkt.BMS.cell1);
   //debugSer.println(powerPkt.BMS.protectionsEnabled, BIN);
 
-  for (uint8_t i = 0; i < 6; i++) {
+  for (uint8_t i = 0; i < 5; i++) {
     if (command.convertersEnabled[i]) {
       digitalWrite(enables[i], 1);
     } else {
