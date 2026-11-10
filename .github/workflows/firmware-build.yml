@@ -1,0 +1,56 @@
+name: Balius power board firmware
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.sketch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sketch: [bms, pwr]
+
+    steps:
+      - name: Check out RT_Arduino
+        uses: actions/checkout@v4
+
+      - name: Check out RT_Firmware_Libs
+        uses: actions/checkout@v4
+        with:
+          repository: MIT-Rocket-Team/RT_Firmware_Libs
+          ref: d3cd8b761480ff2055947cddfd9a6e57e36f5c74
+          path: external/RT_Firmware_Libs
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install STM32duino core
+        env:
+          STM32_INDEX_URL: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
+        run: |
+          arduino-cli core update-index --additional-urls "$STM32_INDEX_URL"
+          arduino-cli core install STMicroelectronics:stm32@2.12.0 --additional-urls "$STM32_INDEX_URL"
+
+      - name: Configure ${{ matrix.sketch }}
+        run: >-
+          cmake
+          -S "Balius/power_board/${{ matrix.sketch }}"
+          -B "build/${{ matrix.sketch }}"
+          -G Ninja
+          -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0"
+          -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+
+      - name: Compile ${{ matrix.sketch }}
+        run: cmake --build "build/${{ matrix.sketch }}" --parallel 2
