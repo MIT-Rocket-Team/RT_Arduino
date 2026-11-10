@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build BMS and PWR
+    name: Build Sketches
     runs-on: ubuntu-24.04
 
     steps:
@@ -55,3 +55,10 @@ jobs:
             -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
             -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
           cmake --build build/pwr --parallel 2
+
+      - name: Configure and compile flight computer
+        run: |
+          cmake -S Balius/flight_computer -B build/flight_computer -G Ninja \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+          cmake --build build/flight_computer --parallel 2
