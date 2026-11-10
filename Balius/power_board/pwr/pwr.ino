@@ -54,7 +54,7 @@ void setup() {
     monitors[i]->begin();
   }
 }
-
+a
 void loop() {
   // put your main code here, to run repeatedly:
   while (bmsSer.available() >= sizeof(bmsData) + 2) {

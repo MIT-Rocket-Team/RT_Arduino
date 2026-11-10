@@ -10,12 +10,8 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.sketch }}
+    name: Build BMS and PWR
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        sketch: [bms, pwr]
 
     steps:
       - name: Check out RT_Arduino
@@ -43,14 +39,16 @@ jobs:
           arduino-cli core update-index --additional-urls "$STM32_INDEX_URL"
           arduino-cli core install STMicroelectronics:stm32@2.12.0 --additional-urls "$STM32_INDEX_URL"
 
-      - name: Configure ${{ matrix.sketch }}
-        run: >-
-          cmake
-          -S "Balius/power_board/${{ matrix.sketch }}"
-          -B "build/${{ matrix.sketch }}"
-          -G Ninja
-          -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0"
-          -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+      - name: Configure and compile BMS
+        run: |
+          cmake -S Balius/power_board/bms -B build/bms -G Ninja \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+          cmake --build build/bms --parallel 2
 
-      - name: Compile ${{ matrix.sketch }}
-        run: cmake --build "build/${{ matrix.sketch }}" --parallel 2
+      - name: Configure and compile PWR
+        run: |
+          cmake -S Balius/power_board/pwr -B build/pwr -G Ninja \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+          cmake --build build/pwr --parallel 2
