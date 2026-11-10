@@ -729,6 +729,7 @@ void readTelem() {
 }
 
 void updateControls() {
+
 }
 ///////////////////////////////////////////////////
 //                    Airbrakes                  //
