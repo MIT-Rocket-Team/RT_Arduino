@@ -1,14 +1,32 @@
+# Based on the STM32duino easy_cmake.cmake template.
 cmake_minimum_required(VERSION 3.21)
 
-# STM32duino core installed by Arduino IDE / Board Manager.
-file(REAL_PATH
+# STEP 1: set up the core, libraries, and board.
+# -----------------------------------------------------------------------------
+# Override either path at configure time when another computer uses a
+# different Arduino data directory or sketchbook location.
+set(STM32DUINO_CORE_PATH
   "$ENV{LOCALAPPDATA}/Arduino15/packages/RT_STM32/RT_Arduino_Core_STM32"
-  CORE_PATH
+  CACHE PATH "Path to the installed STM32duino core"
 )
-file(REAL_PATH
-  "$ENV{USERPROFILE}/OneDrive/Documents/Arduino/libraries/RT_Firmware_Libs"
-  RT_FIRMWARE_LIB
+
+if(EXISTS "$ENV{USERPROFILE}/OneDrive/Documents/Arduino/libraries")
+  set(_default_user_libs "$ENV{USERPROFILE}/OneDrive/Documents/Arduino/libraries")
+else()
+  set(_default_user_libs "$ENV{USERPROFILE}/Documents/Arduino/libraries")
+endif()
+set(ARDUINO_USER_LIBRARIES
+  "${_default_user_libs}"
+  CACHE PATH "Path to the Arduino sketchbook libraries directory"
 )
+
+file(REAL_PATH "${STM32DUINO_CORE_PATH}" CORE_PATH)
+file(TO_CMAKE_PATH "${CORE_PATH}" CORE_PATH)
+file(REAL_PATH "${ARDUINO_USER_LIBRARIES}" USER_LIBS)
+file(TO_CMAKE_PATH "${USER_LIBS}" USER_LIBS)
+
+set(BOARDNAME "GENERIC_C071GBUX")
+set(RT_FIRMWARE_LIB "${USER_LIBS}/RT_Firmware_Libs")
 
 if(NOT EXISTS "${CORE_PATH}/cmake/toolchain.cmake")
   message(FATAL_ERROR "STM32duino core not found at ${CORE_PATH}")
@@ -20,24 +38,50 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CORE_PATH}/cmake")
 set(CMAKE_TOOLCHAIN_FILE "${CORE_PATH}/cmake/toolchain.cmake")
 
-project(BMS C CXX ASM)
+# This file can be included by a larger project without creating a nested project.
+if(NOT "${CMAKE_PARENT_LIST_FILE}" STREQUAL "${CMAKE_CURRENT_LIST_FILE}")
+  return()
+endif()
 
+project(BMS_project C CXX ASM)
+
+# STEP 2: configure the STM32duino board and build settings.
+# -----------------------------------------------------------------------------
 include(set_board)
-set_board(GENERIC_C071GBUX SERIAL generic USB none)
+set_board("${BOARDNAME}" SERIAL generic USB none)
 
 include(overall_settings)
-overall_settings(OPTIMIZATION s)
+overall_settings(
+  OPTIMIZATION "s"
+  # Newlib Nano is the core default; debug symbols are disabled by default.
+)
+
+# STEP 3: configure the sketch and its libraries.
+# -----------------------------------------------------------------------------
+include(external_library)
 
 include(build_sketch)
-build_sketch(TARGET bms
+build_sketch(TARGET "bms"
   SOURCES
-    bms.ino
+    ./bms.ino
     "${RT_FIRMWARE_LIB}/BQ76922.cpp"
+  DEPENDS
+    Wire
 )
-target_include_directories(bms PRIVATE "${RT_FIRMWARE_LIB}")
-target_link_libraries(bms PRIVATE Wire)
 
-# Optional upload helper; the compile itself does not require CubeProgrammer.
+# The external library is compiled as part of this sketch target.
+target_include_directories(bms PRIVATE "${RT_FIRMWARE_LIB}")
+
+# Suppress C++ warnings for this target's dependencies when a quiet build is desired.
+target_compile_options(base_config INTERFACE
+  "$<$<COMPILE_LANGUAGE:CXX>:-w>"
+)
+
+# STEP 4: optional features and SWD programming.
+# -----------------------------------------------------------------------------
+include(insights)
+insights(TARGET "bms")
+
 find_program(STM32_PROGRAMMER_CLI
   NAMES STM32_Programmer_CLI.exe STM32_Programmer_CLI
   HINTS "$ENV{STM32_PRG_PATH}"
