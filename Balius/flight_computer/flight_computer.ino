@@ -60,13 +60,13 @@ bool loggingEnabled = true;
 
 uint8_t telemPkt[128];
 
-HardwareSerial debugSer(PC7, PC6);
-HardwareSerial gpsSer(PB12, PB13);
-HardwareSerial CAM0_SER(PE7, PE8);
-HardwareSerial CAM1_SER(PE0, PE1);
-HardwareSerial digitalVTXSer(PB15, PB14);
-HardwareSerial analogVTXSer(PA12);
-HardwareSerial pwrSer(PB11, PB10);
+Uart debugSer(PC7, PC6);
+Uart gpsSer(PB12, PB13);
+Uart CAM0_SER(PE7, PE8);
+Uart CAM1_SER(PE0, PE1);
+Uart digitalVTXSer(PB15, PB14);
+Uart analogVTXSer(PA12);
+Uart pwrSer(PB11, PB10);
 
 
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);

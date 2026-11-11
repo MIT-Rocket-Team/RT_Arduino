@@ -1,4 +1,4 @@
-HardwareSerial debugSer(PA3, PA2);
+Uart debugSer(PA3, PA2);
 
 void setup() {
   // put your setup code here, to run once:

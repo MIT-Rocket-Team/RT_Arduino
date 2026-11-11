@@ -1,4 +1,4 @@
-HardwareSerial debugSer(PC7, PC6);
+Uart debugSer(PC7, PC6);
 
 void setup() {
   // put your setup code here, to run once:
