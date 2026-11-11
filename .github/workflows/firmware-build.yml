@@ -33,7 +33,7 @@ jobs:
           path: |
             ~/.arduino15
             ~/.Arduino_Core_STM32_dl
-          key: ${{ runner.os }}-stm32duino-2.12.0
+          key: ${{ runner.os }}-stm32duino-3.0.0
 
       - name: Install STM32duino core
         env:
