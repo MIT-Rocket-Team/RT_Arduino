@@ -10,8 +10,8 @@
 #define EN4 PB5 //8.4V Servo
 
 SoftwareSerial bmsSer(PB8, PB7);
-HardwareSerial debugSer(PA3, PA2);
-HardwareSerial FCSer(PA1, PA0);
+Uart debugSer(PA3, PA2);
+Uart FCSer(PA1, PA0);
 
 //Wire1, Wire2 swapped from schematic
 TwoWire Wire1(PA6,PA7);

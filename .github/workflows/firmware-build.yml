@@ -1,4 +1,4 @@
-name: Balius power board firmware
+name: Build Sketches
 
 on:
   push:
@@ -40,25 +40,25 @@ jobs:
           STM32_INDEX_URL: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
         run: |
           arduino-cli core update-index --additional-urls "$STM32_INDEX_URL"
-          arduino-cli core install STMicroelectronics:stm32@2.12.0 --additional-urls "$STM32_INDEX_URL"
+          arduino-cli core install STMicroelectronics:stm32@3.0.0 --additional-urls "$STM32_INDEX_URL"
 
       - name: Configure and compile BMS
         run: |
           cmake -S Balius/power_board/bms -B build/bms -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
             -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
           cmake --build build/bms --parallel 2
 
       - name: Configure and compile PWR
         run: |
           cmake -S Balius/power_board/pwr -B build/pwr -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
             -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
           cmake --build build/pwr --parallel 2
 
       - name: Configure and compile flight computer
         run: |
           cmake -S Balius/flight_computer -B build/flight_computer -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/2.12.0" \
+            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
             -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
           cmake --build build/flight_computer --parallel 2
