@@ -21,7 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: MIT-Rocket-Team/RT_Firmware_Libs
-          ref: d3cd8b761480ff2055947cddfd9a6e57e36f5c74
           path: external/RT_Firmware_Libs
 
       - name: Install Arduino CLI
