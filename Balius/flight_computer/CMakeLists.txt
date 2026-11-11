@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.21)
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/STM32duinoCore.cmake")
 
 set(BOARDNAME "GENERIC_H743VITX")
-set(RT_FIRMWARE_LIB "${USER_LIBS}/RT_Firmware_Libs")
+resolve_rt_firmware_lib(RT_FIRMWARE_LIB)
 
 if(NOT EXISTS "${RT_FIRMWARE_LIB}/CC1200.cpp")
   message(FATAL_ERROR "RT_Firmware_Libs not found at ${RT_FIRMWARE_LIB}")
@@ -64,11 +64,20 @@ insights(TARGET "flight_computer")
 
 find_program(STM32_PROGRAMMER_CLI
   NAMES STM32_Programmer_CLI.exe STM32_Programmer_CLI
-  HINTS "$ENV{STM32_PRG_PATH}"
+  HINTS
+    "$ENV{STM32_PRG_PATH}"
+    "$ENV{HOME}/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin"
+    "$ENV{HOME}/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/MacOs/bin"
+    "$ENV{HOME}/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/Resources/bin"
+    "/Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/MacOs/bin"
+    "/Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/Resources/bin"
 )
 if(STM32_PROGRAMMER_CLI)
   add_custom_target(program_swd
-    COMMAND "${STM32_PROGRAMMER_CLI}" -c port=SWD -w "$<TARGET_FILE_DIR:flight_computer>/flight_computer.bin" 0x08000000 -v -rst
+    COMMAND "${STM32_PROGRAMMER_CLI}"
+      -c port=SWD
+      -w "$<TARGET_FILE_DIR:flight_computer>/flight_computer.bin" 0x08000000
+      -v -rst
     DEPENDS flight_computer
     USES_TERMINAL
     COMMENT "Programming STM32H743 over SWD"

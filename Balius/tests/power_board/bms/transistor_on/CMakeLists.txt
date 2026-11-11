@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/STM32duinoCore.cmake")
 
 set(BOARDNAME "GENERIC_C071GBUX")
-set(RT_FIRMWARE_LIB "${USER_LIBS}/RT_Firmware_Libs")
+resolve_rt_firmware_lib(RT_FIRMWARE_LIB)
 if(NOT EXISTS "${RT_FIRMWARE_LIB}/BQ76922.cpp")
   message(FATAL_ERROR "RT_Firmware_Libs not found at ${RT_FIRMWARE_LIB}")
 endif()
