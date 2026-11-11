@@ -4,8 +4,8 @@
 
 #define SEND_INTERVAL 500 //ms
 
-HardwareSerial pwrSer(PA1, PA0);
-HardwareSerial debugSer(PA3, PA2);
+Uart pwrSer(PA1, PA0);
+Uart debugSer(PA3, PA2);
 
 BQ76922 bms;
 

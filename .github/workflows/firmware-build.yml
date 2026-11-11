@@ -21,7 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: MIT-Rocket-Team/RT_Firmware_Libs
-          ref: d3cd8b761480ff2055947cddfd9a6e57e36f5c74
           path: external/RT_Firmware_Libs
 
       - name: Install Arduino CLI
@@ -42,23 +41,29 @@ jobs:
           arduino-cli core update-index --additional-urls "$STM32_INDEX_URL"
           arduino-cli core install STMicroelectronics:stm32@3.0.0 --additional-urls "$STM32_INDEX_URL"
 
-      - name: Configure and compile BMS
+      - name: Configure and compile every Balius sketch
+        shell: bash
         run: |
-          cmake -S Balius/power_board/bms -B build/bms -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
-            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
-          cmake --build build/bms --parallel 2
+          set -euo pipefail
 
-      - name: Configure and compile PWR
-        run: |
-          cmake -S Balius/power_board/pwr -B build/pwr -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
-            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
-          cmake --build build/pwr --parallel 2
+          sketches=(
+            Balius/flight_computer
+            Balius/power_board/bms
+            Balius/power_board/pwr
+            Balius/tests/power_board/bms/hello_world
+            Balius/tests/power_board/bms/pwr_serial_test
+            Balius/tests/power_board/bms/transistor_on
+            Balius/tests/power_board/pwr/bms_serial_test
+            Balius/tests/power_board/pwr/converters_on_test
+            Balius/tests/power_board/pwr/hello_world
+            Balius/tests/power_board/pwr/monitor_test
+          )
 
-      - name: Configure and compile flight computer
-        run: |
-          cmake -S Balius/flight_computer -B build/flight_computer -G Ninja \
-            -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
-            -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
-          cmake --build build/flight_computer --parallel 2
+          for sketch in "${sketches[@]}"; do
+            build_dir="build/${sketch//\//_}"
+            echo "Configuring $sketch"
+            cmake -S "$sketch" -B "$build_dir" -G Ninja \
+              -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
+              -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+            cmake --build "$build_dir" --parallel 2
+          done
