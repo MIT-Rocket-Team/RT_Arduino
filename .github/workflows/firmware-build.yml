@@ -48,6 +48,7 @@ jobs:
 
           sketches=(
             Balius/flight_computer
+            Balius/VRX_interface
             Balius/power_board/bms
             Balius/power_board/pwr
             Balius/tests/power_board/bms/hello_world
