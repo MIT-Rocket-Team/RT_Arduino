@@ -56,6 +56,7 @@ jobs:
             Balius/tests/power_board/bms/transistor_on
             Balius/tests/power_board/pwr/bms_serial_test
             Balius/tests/power_board/pwr/converters_on_test
+            Balius/tests/power_board/pwr/converters_off_test
             Balius/tests/power_board/pwr/hello_world
             Balius/tests/power_board/pwr/monitor_test
           )
