@@ -13,3 +13,6 @@ include(overall_settings)
 overall_settings(OPTIMIZATION "s")
 include(build_sketch)
 build_sketch(TARGET "converters_on_test" SOURCES ./converters_on_test.ino)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/program_swd.cmake")
+add_stm32_swd_upload(converters_on_test)
+

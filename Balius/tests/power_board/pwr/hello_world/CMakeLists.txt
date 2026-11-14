@@ -13,3 +13,6 @@ include(overall_settings)
 overall_settings(OPTIMIZATION "s")
 include(build_sketch)
 build_sketch(TARGET "hello_world" SOURCES ./hello_world.ino)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/program_swd.cmake")
+add_stm32_swd_upload(hello_world)
+

@@ -16,3 +16,6 @@ build_sketch(TARGET "bms_serial_test"
   SOURCES ./bms_serial_test.ino
   DEPENDS SoftwareSerial
 )
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/program_swd.cmake")
+add_stm32_swd_upload(bms_serial_test)
+

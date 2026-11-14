@@ -22,3 +22,6 @@ build_sketch(TARGET "pwr_serial_test"
   DEPENDS Wire
 )
 target_include_directories(pwr_serial_test PRIVATE "${RT_FIRMWARE_LIB}")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/program_swd.cmake")
+add_stm32_swd_upload(pwr_serial_test)
+

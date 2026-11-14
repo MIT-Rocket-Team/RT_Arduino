@@ -22,3 +22,6 @@ build_sketch(TARGET "transistor_on"
   DEPENDS Wire
 )
 target_include_directories(transistor_on PRIVATE "${RT_FIRMWARE_LIB}")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/program_swd.cmake")
+add_stm32_swd_upload(transistor_on)
+
