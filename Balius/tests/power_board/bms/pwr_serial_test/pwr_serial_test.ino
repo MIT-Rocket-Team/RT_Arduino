@@ -14,8 +14,6 @@ void setup() {
   Wire.setSCL(PA7);
   Wire.setSDA(PA6);
   bms.begin();
-  delay(100);
-  int16_t dummy = bms.cellVoltage(0); //Chip locks up without a read first
   bms.enterConfigMode();
   bms.disableProtections();
   bms.enableFet();

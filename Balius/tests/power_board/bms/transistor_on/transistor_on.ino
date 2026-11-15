@@ -12,9 +12,7 @@ void setup() {
   Wire.setSCL(PA7);
   Wire.setSDA(PA6);
   bms.begin();
-  delay(100);
-  Serial.println("BMS BEGIN");
-  int16_t dummy = bms.cellVoltage(0); //Chip locks up without a read first
+  Serial.println("BMS BEGIN");  
   bms.enterConfigMode();
   Serial.println("ENTER CONFIG");
   bms.disableProtections();

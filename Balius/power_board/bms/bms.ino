@@ -24,10 +24,8 @@ void setup() {
   debugSer.println("BOOT");
   Wire.setSCL(PA7);
   Wire.setSDA(PA6);
-  bms.begin();
   delay(100);
   debugSer.println("BMS BEGIN");
-  int16_t dummy = bms.cellVoltage(0); //Chip locks up without a read first
   bms.enterConfigMode();
   bms.cellConfig(3);
   bms.minCellVoltage(3.3);
