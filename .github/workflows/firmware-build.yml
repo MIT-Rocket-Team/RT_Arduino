@@ -49,9 +49,11 @@ jobs:
           sketches=(
             Balius/flight_computer
             Balius/tests/flight_computer/baro_test
+            Balius/tests/flight_computer/flash_test
             Balius/tests/flight_computer/cc1200/SPI_test
             Balius/tests/flight_computer/gps
             Balius/tests/flight_computer/gps_forwarding
+            Balius/tests/flight_computer/adc_test
             Balius/VRX_interface
             Balius/power_board/bms
             Balius/power_board/pwr
