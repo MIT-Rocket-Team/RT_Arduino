@@ -24,7 +24,7 @@ void setup() {
   debugSer.println("BOOT");
   Wire.setSCL(PA7);
   Wire.setSDA(PA6);
-  delay(100);
+  bms.begin();
   debugSer.println("BMS BEGIN");
   bms.enterConfigMode();
   bms.cellConfig(3);
