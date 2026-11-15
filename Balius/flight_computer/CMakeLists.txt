@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.21)
 # -----------------------------------------------------------------------------
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/STM32duinoCore.cmake")
 
-set(BOARDNAME "GENERIC_H743VITX")
+set(BOARDNAME "GENERIC_H742VITX")
 resolve_rt_firmware_lib(RT_FIRMWARE_LIB)
 
 if(NOT EXISTS "${RT_FIRMWARE_LIB}/CC1200.cpp")
@@ -35,6 +35,8 @@ overall_settings(
 include(external_library)
 
 include(build_sketch)
+# Give the UBX-NAV-PVT parser enough RX capacity for a complete packet.
+target_compile_definitions(base_config INTERFACE SERIAL_RX_BUFFER_SIZE=128)
 build_sketch(TARGET "flight_computer"
   SOURCES
     ./flight_computer.ino
@@ -80,6 +82,6 @@ if(STM32_PROGRAMMER_CLI)
       -v -rst
     DEPENDS flight_computer
     USES_TERMINAL
-    COMMENT "Programming STM32H743 over SWD"
+    COMMENT "Programming STM32H742 over SWD"
   )
 endif()
