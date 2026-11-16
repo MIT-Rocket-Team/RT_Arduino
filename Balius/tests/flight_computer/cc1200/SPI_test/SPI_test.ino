@@ -19,7 +19,9 @@ uint8_t otherPins[5] = {IMU_CS, FLASH_CS, BARO_CS, VIB_CS, LOAD_CS};
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
 SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
 
-CC1200 cc(&SPI_3, settings, CC_CS);
+uint8_t pwrPin = PA2;
+
+CC1200 cc(&SPI_3, settings, CC_CS, pwrPin);
 
 
 void setup() {

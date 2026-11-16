@@ -72,8 +72,7 @@ Uart pwrSer(PB11, PB10);
 SPIClass SPI_3(MOSI, MISO, SCLK, -1);
 SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
 
-//TODO: Add VDET to CC1200
-CC1200 cc(&SPI_3, settings, CC_CS);
+CC1200 cc(&SPI_3, settings, CC_CS, RF_VDET);
 baro barometer(&SPI_3, settings, BARO_CS);
 flash flashMem(&SPI_3, settings, FLASH_CS);
 
