@@ -7,6 +7,7 @@
 class ADcmXL1021 {
 public:
     static constexpr uint8_t PRODUCT_ID_REGISTER = 0x56;
+    static constexpr uint8_t OUT_BUF_REGISTER = 0x12;
     static constexpr uint16_t EXPECTED_PRODUCT_ID = 0x03FD;
     static constexpr uint16_t FFT_BIN_COUNT = 2048;
     static constexpr uint8_t FFT_RECORD_COUNT = 10;
@@ -16,10 +17,11 @@ public:
     uint16_t readRegister(uint8_t lowerByteAddress);
     uint16_t readProductId();
 
-    // Configure a single-rate MFFT capture with Hanning window. Default rate
-    // code 1 is 220 kSPS; default FIR selection 3 is the 10 kHz low-pass.
+    // Configure a single-rate MFFT capture with Hanning window. Rate code 4
+    // is 27.5 kSPS (6.71 Hz/bin); FIR selection 3 is the 10 kHz low-pass.
     // FIR selections: 0 none, 1/2/3 LP 1/5/10 kHz, 4/5/6 HP 1/5/10 kHz.
-    bool configureFFT(uint8_t sampleRateCode = 1, uint8_t firSelection = 3);
+    bool configureFFT(uint8_t sampleRateCode = 1, uint8_t firSelection = 3,
+                      uint8_t fftAverages = 8);
 
     // Start one manually triggered FFT using the current REC_CTRL settings.
     // Returns immediately; poll fftReady() from the application loop.

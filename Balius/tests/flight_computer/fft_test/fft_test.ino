@@ -23,8 +23,9 @@ ADcmXL1021 sensor(&SPI_3, settings, VIB_CS);
 // Set true to save each FFT to on-chip flash; false keeps it in volatile RAM.
 constexpr bool SAVE_TO_FLASH = false;
 constexpr uint8_t FLASH_RECORD_INDEX = 0;
-constexpr uint32_t SAMPLE_RATE_HZ = 220000;
-constexpr uint32_t MIN_CAPTURE_TIME_MS = 100;
+constexpr uint8_t FFT_SAMPLE_RATE_CODE = 4; // 27.5 kSPS; 6.71 Hz/bin.
+constexpr uint32_t SAMPLE_RATE_HZ = 27500;
+constexpr uint32_t MIN_CAPTURE_TIME_MS = 200;
 constexpr uint32_t CAPTURE_TIMEOUT_MS = 5000;
 
 uint16_t fftBins[ADcmXL1021::FFT_BIN_COUNT];
@@ -52,6 +53,16 @@ void streamFFT() {
   debugSer.println("FFT_END");
 }
 
+void printRegister(const char* name, uint8_t address) {
+  debugSer.print(name);
+  debugSer.print("=0x");
+  const uint16_t value = sensor.readRegister(address);
+  if (value < 0x1000) debugSer.print('0');
+  if (value < 0x0100) debugSer.print('0');
+  if (value < 0x0010) debugSer.print('0');
+  debugSer.println(value, HEX);
+}
+
 void setup() {
   debugSer.begin(115200);
   delay(100);
@@ -67,7 +78,7 @@ void setup() {
     debugSer.println("ERROR: ADcmXL1021 product ID mismatch");
     return;
   }
-  if (!sensor.configureFFT()) {
+  if (!sensor.configureFFT(FFT_SAMPLE_RATE_CODE, 3, 8)) {
     debugSer.println("ERROR: FFT configuration failed or device is busy");
     return;
   }
@@ -75,6 +86,8 @@ void setup() {
 
   debugSer.print("Mode: ");
   debugSer.println(SAVE_TO_FLASH ? "FLASH" : "RAM");
+  printRegister("REC_CTRL", 0x1A);
+  printRegister("DIAG_STAT", 0x3C);
   debugSer.println("Ready to capture");
 }
 
@@ -89,6 +102,11 @@ void loop() {
       captureStarted = true;
       captureStartedAt = now;
       debugSer.println("FFT capture started");
+    }
+    else {
+      debugSer.println("ERROR: FFT capture start failed");
+      printRegister("REC_CTRL", 0x1A);
+      printRegister("DIAG_STAT", 0x3C);
     }
   }
 
@@ -109,6 +127,8 @@ void loop() {
 
   if (captureStarted && (uint32_t)(now - captureStartedAt) >= CAPTURE_TIMEOUT_MS) {
     debugSer.println("ERROR: FFT capture timed out");
+    printRegister("REC_CTRL", 0x1A);
+    printRegister("DIAG_STAT", 0x3C);
     captureStarted = false;
     captureReported = true;
   }
