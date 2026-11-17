@@ -50,57 +50,17 @@ endif()
 file(REAL_PATH "${STM32DUINO_CORE_PATH}" CORE_PATH)
 file(TO_CMAKE_PATH "${CORE_PATH}" CORE_PATH)
 
-if(NOT ARDUINO_USER_LIBRARIES)
-  set(_arduino_library_candidates)
-  if(WIN32 AND DEFINED ENV{USERPROFILE})
-    list(APPEND _arduino_library_candidates
-      "$ENV{USERPROFILE}/OneDrive/Documents/Arduino/libraries"
-      "$ENV{USERPROFILE}/Documents/Arduino/libraries"
-    )
-  elseif(DEFINED ENV{HOME})
-    list(APPEND _arduino_library_candidates
-      "$ENV{HOME}/Documents/Arduino/libraries"
-      "$ENV{HOME}/Arduino/libraries"
-    )
-  endif()
+# The firmware libraries are vendored in RT_Arduino/libraries so builds do not
+# depend on a separate Arduino user-library installation.
+get_filename_component(
+  _rt_arduino_firmware_lib
+  "${CMAKE_CURRENT_LIST_DIR}/../../libraries"
+  ABSOLUTE
+)
+file(TO_CMAKE_PATH "${_rt_arduino_firmware_lib}" _rt_arduino_firmware_lib)
 
-  foreach(_arduino_library_candidate IN LISTS _arduino_library_candidates)
-    if(IS_DIRECTORY "${_arduino_library_candidate}")
-      set(ARDUINO_USER_LIBRARIES "${_arduino_library_candidate}")
-      break()
-    endif()
-  endforeach()
-
-  if(NOT ARDUINO_USER_LIBRARIES)
-    if(DEFINED ENV{HOME})
-      set(ARDUINO_USER_LIBRARIES "$ENV{HOME}/Documents/Arduino/libraries")
-    elseif(DEFINED ENV{USERPROFILE})
-      set(ARDUINO_USER_LIBRARIES "$ENV{USERPROFILE}/Documents/Arduino/libraries")
-    else()
-      set(ARDUINO_USER_LIBRARIES "${CMAKE_CURRENT_LIST_DIR}/../../libraries")
-    endif()
-  endif()
-endif()
-
-file(REAL_PATH "${ARDUINO_USER_LIBRARIES}" USER_LIBS)
-file(TO_CMAKE_PATH "${USER_LIBS}" USER_LIBS)
-
-# Arduino library installs sometimes differ only in the capitalization of this
-# directory name. Resolve both common spellings for case-sensitive file systems.
 function(resolve_rt_firmware_lib output_variable)
-  foreach(_rt_firmware_lib_candidate
-      "${USER_LIBS}/RT_Firmware_Libs"
-      "${USER_LIBS}/RT_Firmware_libs"
-  )
-    if(IS_DIRECTORY "${_rt_firmware_lib_candidate}")
-      file(REAL_PATH "${_rt_firmware_lib_candidate}" _rt_firmware_lib_path)
-      file(TO_CMAKE_PATH "${_rt_firmware_lib_path}" _rt_firmware_lib_path)
-      set(${output_variable} "${_rt_firmware_lib_path}" PARENT_SCOPE)
-      return()
-    endif()
-  endforeach()
-
-  set(${output_variable} "${USER_LIBS}/RT_Firmware_Libs" PARENT_SCOPE)
+  set(${output_variable} "${_rt_arduino_firmware_lib}" PARENT_SCOPE)
 endfunction()
 
 list(APPEND CMAKE_MODULE_PATH "${CORE_PATH}/cmake")

@@ -17,12 +17,6 @@ jobs:
       - name: Check out RT_Arduino
         uses: actions/checkout@v4
 
-      - name: Check out RT_Firmware_Libs
-        uses: actions/checkout@v4
-        with:
-          repository: MIT-Rocket-Team/RT_Firmware_Libs
-          path: external/RT_Firmware_Libs
-
       - name: Install Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -74,7 +68,6 @@ jobs:
             build_dir="build/${sketch//\//_}"
             echo "Configuring $sketch"
             cmake -S "$sketch" -B "$build_dir" -G Ninja \
-              -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0" \
-              -DARDUINO_USER_LIBRARIES="${{ github.workspace }}/external"
+              -DSTM32DUINO_CORE_PATH="$HOME/.arduino15/packages/STMicroelectronics/hardware/stm32/3.0.0"
             cmake --build "$build_dir" --parallel 2
           done
