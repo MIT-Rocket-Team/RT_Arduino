@@ -12,8 +12,8 @@ SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
 
 CC1200 cc(&SPI_3, settings, CS);
 
-HardwareSerial gpsSer(PB12, PB13);
-HardwareSerial debugSer(PC7, PC6);
+Uart gpsSer(PB12, PB13);
+Uart debugSer(PC7, PC6);
 byte recBuf[128];
 byte txBuf[16];
 
@@ -38,28 +38,29 @@ void setup() {
     digitalWrite(PA0, 1);
   }
   cc.simpleConfig();
-  cc.freq915();
-  cc.Rx(128);
+  cc.Rx(3);
 }
   
 void loop() {
   gps.update();
   if(cc.status() == 6) {
     cc.flushRx();
-    cc.freq915();
-    cc.Rx(128);
+    cc.Rx(3);
   }
 
   if(cc.status() == 0) {
-    cc.Rx(128);
+    cc.Rx(3);
   }
 
   //Serial.println(cc.status());
   //Serial.println(cc.avail());
   //Serial.println();
 
-  if(cc.avail() == 128) {
-    Serial.write(0xAB);
+  if(cc.avail() == 3) {
+    cc.read(recBuf, 3);
+    Serial.print(recBuf[0]);
+    Serial.print(cc.rssi());
+    /*Serial.write(0xAB);
     Serial.write(0xAB);
     cc.read(recBuf, 128);
     Serial.write(recBuf, 128);
@@ -97,13 +98,13 @@ void loop() {
       for (uint8_t i = 1; i < 16; i++) {
         txBuf[i] = 0;
       }
-    }
-    cc.freq920();
-    cc.Tx(txBuf, 16);
+    }*/
+    //cc.freq920();
+    //cc.Tx(txBuf, 16);
     pyros = 0;
-    while (cc.status() != 0) {}
-    cc.freq915();
-    cc.Rx(128);   
+    //while (cc.status() != 0) {}
+    //cc.freq915();
+    cc.Rx(3);   
   }
 }
   

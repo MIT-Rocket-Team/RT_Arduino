@@ -56,6 +56,7 @@ jobs:
             Balius/tests/flight_computer/gps_forwarding
             Balius/tests/flight_computer/adc_test
             Balius/tests/flight_computer/adcmxl1021_test
+            Balius/tests/flight_computer/fft_test
             Balius/VRX_interface
             Balius/power_board/bms
             Balius/power_board/pwr
