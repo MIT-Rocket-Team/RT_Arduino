@@ -12,6 +12,7 @@ class ADIS16500 {
     public:
         ADIS16500(SPIClass* SPI, SPISettings settings, int cs);
         void setup();
+        uint16_t readProductId();
         float getAccelX();
         float getAccelY();
         float getAccelZ();

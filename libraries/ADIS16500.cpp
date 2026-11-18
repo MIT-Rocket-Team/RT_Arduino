@@ -16,8 +16,11 @@ void ADIS16500::setup() {
     pinMode(_cs, OUTPUT);
     digitalWrite(_cs, 1);
     _SPI->begin();
-    _SPI->beginTransaction(_settings);
     delay(1);
+}
+
+uint16_t ADIS16500::readProductId() {
+    return _readReg(0x72);
 }
 
 float ADIS16500::getAccelX() {

@@ -46,6 +46,7 @@ jobs:
             Balius/tests/flight_computer/flash_test
             Balius/tests/flight_computer/cc1200/SPI_test
             Balius/tests/flight_computer/cc1200/simple_tx
+            Balius/tests/flight_computer/adis16500_test
             Balius/tests/flight_computer/gps
             Balius/tests/flight_computer/gps_forwarding
             Balius/tests/flight_computer/adc_test
