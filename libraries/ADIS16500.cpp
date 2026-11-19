@@ -102,11 +102,14 @@ float ADIS16500::getVerticalAccelMinusGravity() {
 // all ADIS16500 regs are on page 0 (< 0x80) so no PAGE_ID writes like adis.c does
 // each 16 bit frame gets its own CS pulse, read data comes back on the next frame
 uint16_t ADIS16500::_frame(uint16_t tx) {
-    digitalWrite(_cs, 0);
     _SPI->beginTransaction(_settings);
+    // Configure CPOL/CPHA before selecting the sensor. Switching to Mode 3
+    // after CS is low can create a clock edge that the IMU may sample as data.
+    digitalWrite(_cs, 0);
+    delayMicroseconds(1);
     uint16_t rx = _SPI->transfer16(tx);
-    _SPI->endTransaction();
     digitalWrite(_cs, 1);
+    _SPI->endTransaction();
     delayMicroseconds(16); // tSTALL
     return rx;
 }
